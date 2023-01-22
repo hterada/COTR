@@ -22,6 +22,7 @@ RUN conda init bash
 SHELL ["conda", "run", "-n", "cotr_env", "/bin/bash", "-c"]
 RUN conda info -e
 RUN conda install -c conda-forge glfw
+RUN pip install torchprof
 
 VOLUME ["/COTR"]
 WORKDIR /COTR

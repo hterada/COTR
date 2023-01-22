@@ -4,12 +4,14 @@ COTR demo for a single image pair
 import argparse
 import os
 import time
+import pickle
 
 import cv2
 import numpy as np
 import torch
 import imageio
 import matplotlib.pyplot as plt
+import torchprof
 
 from COTR.utils import utils, debug_utils
 from COTR.models import build_model
@@ -34,11 +36,19 @@ def main(opt):
 
     engine = SparseEngine(model, 32, mode='tile')
     t0 = time.time()
-    corrs = engine.cotr_corr_multiscale_with_cycle_consistency(img_a, img_b, np.linspace(0.5, 0.0625, 4), 1, max_corrs=opt.max_corrs, queries_a=None)
+    with torchprof.Profile(model, use_cuda=True, profile_memory=False) as prof:
+        corrs = engine.cotr_corr_multiscale_with_cycle_consistency(img_a, img_b, np.linspace(0.5, 0.0625, 4), 1, max_corrs=opt.max_corrs, queries_a=None)
     t1 = time.time()
+    print(f'spent {t1-t0} seconds for {opt.max_corrs} correspondences.')
+    print(prof.display(show_events=False))
+    # prof row data
+    trace, event_lists_dict = prof.raw()
+    with open('prof_demo_single_pair.pickle', 'wb') as fw:
+        pickle.dump((trace,event_lists_dict), fw)
+
 
     utils.visualize_corrs(img_a, img_b, corrs)
-    print(f'spent {t1-t0} seconds for {opt.max_corrs} correspondences.')
+
     dense = triangulate_corr(corrs, img_a.shape, img_b.shape)
     warped = cv2.remap(img_b, dense[..., 0].astype(np.float32), dense[..., 1].astype(np.float32), interpolation=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT)
     plt.imshow(warped / 255 * 0.5 + img_a / 255 * 0.5)
