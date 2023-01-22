@@ -192,6 +192,8 @@ class SparseEngine():
                             loc_to = (corr_a[tuple(np.floor(pos).astype('int'))].copy() * 0.5 + 0.5) * img_b.shape[:2][::-1]
                             tasks.append(RefinementTask(img_a, img_b, loc_from, loc_to, area_a, area_b, converge_iters, zoom_ins, identifier=i))
                             counter += 1
+        for task in tasks:
+            print(f"@gen_tasks:task={task}")
         return tasks
 
     def cotr_corr_multiscale(self, img_a, img_b, zoom_ins=[1.0], converge_iters=1, max_corrs=1000, queries_a=None, return_idx=False, force=False, return_tasks_only=False, areas=None):
@@ -302,7 +304,7 @@ class FasterSparseEngine(SparseEngine):
         pilot_from_right = pilot_from_center_x + pilot_info['patch_from'].w/2 * SAFE_AREA
         pilot_from_upper = pilot_from_center_y - pilot_info['patch_from'].h/2 * SAFE_AREA
         pilot_from_lower = pilot_from_center_y + pilot_info['patch_from'].h/2 * SAFE_AREA
-        
+
         pilot_to_center_x = pilot_info['patch_to'].x + pilot_info['patch_to'].w/2
         pilot_to_center_y = pilot_info['patch_to'].y + pilot_info['patch_to'].h/2
         pilot_to_left  = pilot_to_center_x - pilot_info['patch_to'].w/2 * SAFE_AREA

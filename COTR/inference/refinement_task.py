@@ -189,3 +189,6 @@ class RefinementTask():
 
     def conclude_intermedia(self):
         return np.concatenate([np.array(self.loc_history), np.array(self.job_history)], axis=1)
+
+    def __str__(self):
+        return f"RefinementTask:[{self.identifier}] from:{self.loc_from} to:{self.best_loc_to}"
