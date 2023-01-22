@@ -35,7 +35,13 @@ def main(opt):
     queries = np.load('./sample_data/face_landmarks.npy')[0]
 
     engine = SparseEngine(model, 32, mode='stretching')
+    t0 = time.time()
+    print(f"start:{t0}")
+    # corrs: ndarray
     corrs = engine.cotr_corr_multiscale(img_a, img_b, np.linspace(0.5, 0.0625, 4), 1, queries_a=queries, force=False)
+    t1 = time.time()
+    print(f'spent {t1-t0} seconds for {len(corrs)} correspondences.')
+
 
     f, axarr = plt.subplots(1, 2)
     axarr[0].imshow(img_a)
