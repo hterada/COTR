@@ -1,3 +1,4 @@
+from typing import Optional
 import time
 
 import numpy as np
@@ -103,6 +104,13 @@ class RefinementTask():
         return None, query
 
     def get_task(self):
+        """
+        タスクの from-to 左右連結画像と、クエリ情報を返す。
+        また、self.cur_job をセットし、self.job_history に パッチ情報を追加する。
+
+        Returns:
+            _type_: _description_
+        """
         assert self.status == 'unfinished'
         patch_from = get_patch_centered_at(self.image_from, self.loc_from, scale=self.s_from * self.cur_zoom)
         patch_to = get_patch_centered_at(self.image_to, self.cur_loc_to, scale=self.s_to * self.cur_zoom)
@@ -151,6 +159,11 @@ class RefinementTask():
         return loc_to
 
     def step(self, raw_to_loc):
+        """zoom レベルを一歩進める？
+
+        Args:
+            raw_to_loc (_type_): _description_
+        """
         assert self.submitted == True
         self.submitted = False
         loc_to = self.scale_to_loc(raw_to_loc)
@@ -181,7 +194,15 @@ class RefinementTask():
             self.cur_loc_to = self.best_loc_to
             self.next_zoom()
 
-    def conclude(self, force=False):
+    def conclude(self, force=False)->Optional[np.ndarray]:
+        """条件をチェックし、OKならタスクの「結論([from, to])」を返す。そうでなければ None を返す。
+
+        Args:
+            force (bool, optional): _description_. Defaults to False.
+
+        Returns:
+            np.ndarray: _description_
+        """
         loc_history = np.array(self.loc_history)
         if (force == False) and (max(loc_history.std(axis=0)) >= THRESHOLD_PIXELS_RELATIVE * max(*self.image_to.shape)):
             return None

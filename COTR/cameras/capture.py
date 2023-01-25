@@ -121,6 +121,14 @@ def pad_to_square_np(img, till_divisible_by=1, return_starts=False):
 
 
 def stretch_to_square_np(img):
+    """imgを正方形にリサイズさいた画像を返す。その辺の長さは、img の長辺の長さとする。
+
+    Args:
+        img (np.ndarray): 画像
+
+    Returns:
+        np.ndarray: 正方形に変換された画像
+    """
     size = max(*img.shape[:2])
     return np.array(PIL.Image.fromarray(img).resize((size, size), resample=PIL.Image.BILINEAR))
 

@@ -247,7 +247,7 @@ def visualize_corrs(img1, img2, corrs, mask=None):
         aa=False,
         color=cols[1],
     )
-    
+
 
     # Draw Inliers
     _x1 = x1[mask]
@@ -269,3 +269,8 @@ def visualize_corrs(img1, img2, corrs, mask=None):
     ax = plt.gca()
     ax.set_axis_off()
     plt.show()
+
+import inspect
+def code_location():
+    frame = inspect.currentframe().f_back
+    return f"FILE {frame.f_code.co_filename}, line {frame.f_lineno}, in {frame.f_code.co_name}"

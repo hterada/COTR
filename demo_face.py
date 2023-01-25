@@ -11,6 +11,7 @@ import numpy as np
 import torch
 import imageio
 import matplotlib.pyplot as plt
+import torchprof
 
 from COTR.utils import utils, debug_utils
 from COTR.models import build_model
@@ -28,6 +29,7 @@ def main(opt):
     model = model.cuda()
     weights = torch.load(opt.load_weights_path, map_location='cpu')['model_state_dict']
     utils.safe_load_weights(model, weights)
+    # eval(): switch to inference mode
     model = model.eval()
 
     img_a = imageio.imread('./sample_data/imgs/face_1.png', pilmode='RGB')
@@ -35,13 +37,17 @@ def main(opt):
     queries = np.load('./sample_data/face_landmarks.npy')[0]
 
     engine = SparseEngine(model, 32, mode='stretching')
-    t0 = time.time()
-    print(f"start:{t0}")
-    # corrs: ndarray
-    corrs = engine.cotr_corr_multiscale(img_a, img_b, np.linspace(0.5, 0.0625, 4), 1, queries_a=queries, force=False)
-    t1 = time.time()
-    print(f'spent {t1-t0} seconds for {len(corrs)} correspondences.')
-
+    with torchprof.Profile(model, use_cuda=True, profile_memory=True) as prof:
+        t0 = time.time()
+        print(f"start:{t0}")
+        # corrs: ndarray
+        corrs = engine.cotr_corr_multiscale(img_a, img_b, np.linspace(0.5, 0.0625, 4), 1, queries_a=queries, force=False)
+        t1 = time.time()
+        # ANA:
+        for corr in corrs:
+            print(f"corr:{corr}, {type(corr)}")
+        print(f'spent {t1-t0} seconds for {len(corrs)} correspondences.')
+    print(prof.display(show_events=False))
 
     f, axarr = plt.subplots(1, 2)
     axarr[0].imshow(img_a)

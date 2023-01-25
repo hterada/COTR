@@ -2,6 +2,7 @@
 Inference engine for sparse image pair correspondences
 '''
 
+from typing import List, Tuple, Union
 import time
 import random
 
@@ -11,6 +12,7 @@ import torch
 from COTR.inference.inference_helper import THRESHOLD_SPARSE, THRESHOLD_AREA, cotr_flow, cotr_corr_base
 from COTR.inference.refinement_task import RefinementTask
 from COTR.utils import debug_utils, utils
+from COTR.utils.utils import code_location
 from COTR.cameras.capture import stretch_to_square_np
 
 
@@ -22,9 +24,22 @@ class SparseEngine():
         self.total_tasks = 0
         self.mode = mode
 
-    def form_batch(self, tasks, zoom=None):
+    def form_batch(self, tasks:List[RefinementTask], zoom=None)->Tuple[List[RefinementTask], List[torch.Tensor], List[torch.Tensor]]:
+        """
+        tasks 内の task を調べ、以下の３つのリストを返す。
+        (1) task_ref: task.status == 'unfinished' かつ task.submitted == False の task
+        (2) img_batch: task の画像
+        (3) query_batch:
+
+        Args:
+            tasks (_type_): _description_
+            zoom (_type_, optional): _description_. Defaults to None.
+
+        Returns:
+            _type_: _description_
+        """
         counter = 0
-        task_ref = []
+        task_ref:List[RefinementTask] = []
         img_batch = []
         query_batch = []
         for t in tasks:
@@ -44,24 +59,53 @@ class SparseEngine():
         query_batch = torch.stack(query_batch)
         return task_ref, img_batch, query_batch
 
-    def infer_batch(self, img_batch, query_batch):
+    def infer_batch(self, img_batch, query_batch)->np.ndarray:
+        """img_batch, query_batch について model 推論を行い、結果を返す。
+
+        Args:
+            img_batch (_type_): _description_
+            query_batch (_type_): _description_
+
+        Raises:
+            ValueError: _description_
+
+        Returns:
+            _type_: _description_
+        """
         self.total_tasks += img_batch.shape[0]
         device = next(self.model.parameters()).device
         img_batch = img_batch.to(device)
         query_batch = query_batch.to(device)
+        # 推論実行
         out = self.model(img_batch, query_batch)['pred_corrs'].clone().detach()
         out = out.cpu().numpy()[:, 0, :]
         if utils.has_nan(out):
             raise ValueError('NaN in prediction')
         return out
 
-    def conclude_tasks(self, tasks, return_idx=False, force=False,
+    def conclude_tasks(self, tasks:List[RefinementTask], return_idx=False, force=False,
                        offset_x_from=0,
                        offset_y_from=0,
                        offset_x_to=0,
                        offset_y_to=0,
                        img_a_shape=None,
-                       img_b_shape=None):
+                       img_b_shape=None)->Union[Tuple[List[np.ndarray], List[int]], List[np.ndarray]]:
+        """tasks の「結論」を出す。
+
+        Args:
+            tasks (List[RefinementTask]): _description_
+            return_idx (bool, optional): _description_. Defaults to False.
+            force (bool, optional): _description_. Defaults to False.
+            offset_x_from (int, optional): _description_. Defaults to 0.
+            offset_y_from (int, optional): _description_. Defaults to 0.
+            offset_x_to (int, optional): _description_. Defaults to 0.
+            offset_y_to (int, optional): _description_. Defaults to 0.
+            img_a_shape (_type_, optional): _description_. Defaults to None.
+            img_b_shape (_type_, optional): _description_. Defaults to None.
+
+        Returns:
+            _type_: _description_
+        """
         corrs = []
         idx = []
         for t in tasks:
@@ -91,6 +135,14 @@ class SparseEngine():
         return counter
 
     def num_good_tasks(self, tasks):
+        """tasks中の result == 'good' の個数を返す
+
+        Args:
+            tasks (_type_): _description_
+
+        Returns:
+            int: _description_
+        """
         counter = 0
         for t in tasks:
             if t.result == 'good':
@@ -106,17 +158,44 @@ class SparseEngine():
         return tasks
 
     def gen_tasks(self, img_a, img_b, zoom_ins=[1.0], converge_iters=1, max_corrs=1000, queries_a=None, force=False, areas=None):
+        """タスクを作る
+
+        Args:
+            img_a (_type_): _description_
+            img_b (_type_): _description_
+            zoom_ins (list, optional): _description_. Defaults to [1.0].
+            converge_iters (int, optional): _description_. Defaults to 1.
+            max_corrs (int, optional): _description_. Defaults to 1000.
+            queries_a (_type_, optional): _description_. Defaults to None.
+            force (bool, optional): _description_. Defaults to False.
+            areas (_type_, optional): _description_. Defaults to None.
+
+        Raises:
+            ValueError: _description_
+
+        Returns:
+            _type_: _description_
+        """
+        print(code_location())
+
         if areas is not None:
+            # (A) areas が指定されている場合
             assert queries_a is not None
             assert force == True
             assert max_corrs >= queries_a.shape[0]
             return self.gen_tasks_w_known_scale(img_a, img_b, queries_a, areas, zoom_ins=zoom_ins, converge_iters=converge_iters, max_corrs=max_corrs)
+        # (B) areas が指定されていない場合
+        print(f"@gen_tasks: mode={self.mode}")
         if self.mode == 'stretching':
             if img_a.shape[0] != img_a.shape[1] or img_b.shape[0] != img_b.shape[1]:
+                # img_a, img_b のどちらかが正方形ではない場合
                 img_a_shape = img_a.shape
                 img_b_shape = img_b.shape
+                # 正方形にリサイズした画像を作る
                 img_a_sq = stretch_to_square_np(img_a.copy())
                 img_b_sq = stretch_to_square_np(img_b.copy())
+
+                # オプティカルフローを計算
                 corr_a, con_a, resample_a, corr_b, con_b, resample_b = cotr_flow(self.model,
                                                                                  img_a_sq,
                                                                                  img_b_sq
@@ -128,11 +207,13 @@ class SparseEngine():
                 con_b = utils.float_image_resize(con_b, img_b_shape[:2])
                 resample_b = utils.float_image_resize(resample_b, img_b_shape[:2])
             else:
+                # オプティカルフローを計算
                 corr_a, con_a, resample_a, corr_b, con_b, resample_b = cotr_flow(self.model,
                                                                                  img_a,
                                                                                  img_b
                                                                                  )
         elif self.mode == 'tile':
+            # オプティカルフローを計算
             corr_a, con_a, resample_a, corr_b, con_b, resample_b = cotr_flow(self.model,
                                                                              img_a,
                                                                              img_b
@@ -140,18 +221,20 @@ class SparseEngine():
         else:
             raise ValueError(f'unsupported mode: {self.mode}')
         mask_a = con_a < THRESHOLD_SPARSE
+        print(f"mask_a: type:{type(mask_a)}")
         mask_b = con_b < THRESHOLD_SPARSE
         area_a = (con_a < THRESHOLD_AREA).sum() / mask_a.size
         area_b = (con_b < THRESHOLD_AREA).sum() / mask_b.size
         tasks = []
 
         if queries_a is None:
+            print(code_location())
             index_a = np.where(mask_a)
             index_a = np.array(index_a).T
-            index_a = index_a[np.random.choice(len(index_a), min(max_corrs, len(index_a)))]
+            index_a = index_a[np.random.choice(len(index_a), size=min(max_corrs, len(index_a)))]
             index_b = np.where(mask_b)
             index_b = np.array(index_b).T
-            index_b = index_b[np.random.choice(len(index_b), min(max_corrs, len(index_b)))]
+            index_b = index_b[np.random.choice(len(index_b), size=min(max_corrs, len(index_b)))]
             for pos in index_a:
                 loc_from = pos[::-1]
                 loc_to = (corr_a[tuple(np.floor(pos).astype('int'))].copy() * 0.5 + 0.5) * img_b.shape[:2][::-1]
@@ -165,21 +248,30 @@ class SparseEngine():
                 loc_to = (corr_b[tuple(np.floor(pos).astype('int'))].copy() * 0.5 + 0.5) * img_a.shape[:2][::-1]
                 tasks.append(RefinementTask(img_a, img_b, loc_to, loc_from, area_a, area_b, converge_iters, zoom_ins))
         else:
+            print(code_location())
             if force:
+                print(code_location())
                 for i, loc_from in enumerate(queries_a):
                     pos = loc_from[::-1]
                     pos = np.array([np.clip(pos[0], 0, corr_a.shape[0] - 1), np.clip(pos[1], 0, corr_a.shape[1] - 1)], dtype=np.int)
                     loc_to = (corr_a[tuple(pos)].copy() * 0.5 + 0.5) * img_b.shape[:2][::-1]
                     tasks.append(RefinementTask(img_a, img_b, loc_from, loc_to, area_a, area_b, converge_iters, zoom_ins, identifier=i))
             else:
+                print(code_location())
                 for i, loc_from in enumerate(queries_a):
                     pos = loc_from[::-1]
+                    print(f"pos:{pos}")
                     if (pos > np.array(img_a.shape[:2]) - 1).any() or (pos < 0).any():
+                        print("SKIP1")
                         continue
                     if mask_a[tuple(np.floor(pos).astype('int'))]:
                         loc_to = (corr_a[tuple(np.floor(pos).astype('int'))].copy() * 0.5 + 0.5) * img_b.shape[:2][::-1]
                         tasks.append(RefinementTask(img_a, img_b, loc_from, loc_to, area_a, area_b, converge_iters, zoom_ins, identifier=i))
+                        print(f"APPEND:{tasks[-1]}")
+                    else:
+                        print("SKIP2")
                 if len(tasks) < max_corrs:
+                    print(code_location())
                     extra = max_corrs - len(tasks)
                     counter = 0
                     for i, loc_from in enumerate(queries_a):
@@ -192,8 +284,9 @@ class SparseEngine():
                             loc_to = (corr_a[tuple(np.floor(pos).astype('int'))].copy() * 0.5 + 0.5) * img_b.shape[:2][::-1]
                             tasks.append(RefinementTask(img_a, img_b, loc_from, loc_to, area_a, area_b, converge_iters, zoom_ins, identifier=i))
                             counter += 1
-        for task in tasks:
-            print(f"@gen_tasks:task={task}")
+        #ANA:
+        # for task in tasks:
+        #     print(f"@gen_tasks:task={task}")
         return tasks
 
     def cotr_corr_multiscale(self, img_a, img_b, zoom_ins=[1.0], converge_iters=1, max_corrs=1000, queries_a=None, return_idx=False, force=False, return_tasks_only=False, areas=None):
@@ -209,30 +302,36 @@ class SparseEngine():
         tasks = self.gen_tasks(img_a, img_b, zoom_ins, converge_iters, max_corrs, queries_a, force, areas)
         while True:
             num_g = self.num_good_tasks(tasks)
-            print(f'{num_g} / {max_corrs} | {self.num_finished_tasks(tasks)} / {len(tasks)}')
+            print(f'good tasks:{num_g} / max_corrs:{max_corrs} | finished:{self.num_finished_tasks(tasks)} / task len:{len(tasks)}')
             task_ref, img_batch, query_batch = self.form_batch(tasks)
             if len(task_ref) == 0:
+                print(f"cotr_corr_multiscale: break by len(task_ref)==0")
                 break
             if num_g >= max_corrs:
+                print(f"cotr_corr_multiscale: break by num_g >= max_corrs")
                 break
+            # 推論実行
             out = self.infer_batch(img_batch, query_batch)
+            # タスクのズームを一歩進める
             for t, o in zip(task_ref, out):
                 t.step(o)
         if return_tasks_only:
             return tasks
         if return_idx:
+            # タスクの「結論」をだす
             corrs, idx = self.conclude_tasks(tasks, return_idx=True, force=force,
                                              img_a_shape=img_a_shape,
                                              img_b_shape=img_b_shape,)
             corrs = corrs[:max_corrs]
             idx = idx[:max_corrs]
-            return corrs, idx
+            return corrs, idx # 対応づけ情報と、idx とを共に返す。
         else:
+            # タスクの結論をだす。
             corrs = self.conclude_tasks(tasks, force=force,
                                         img_a_shape=img_a_shape,
                                         img_b_shape=img_b_shape,)
             corrs = corrs[:max_corrs]
-            return corrs
+            return corrs # 対応付け情報を返す。
 
     def cotr_corr_multiscale_with_cycle_consistency(self, img_a, img_b, zoom_ins=[1.0], converge_iters=1, max_corrs=1000, queries_a=None, return_idx=False, return_cycle_error=False):
         EXTRACTION_RATE = 0.3

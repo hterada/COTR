@@ -11,6 +11,8 @@ from .backbone import build_backbone
 from .transformer import build_transformer
 from .position_encoding import NerfPositionalEncoding, MLP
 
+from COTR.utils.stopwatch import StopWatch
+
 
 class COTR(nn.Module):
 
@@ -24,20 +26,21 @@ class COTR(nn.Module):
         self.backbone = backbone
 
     def forward(self, samples: NestedTensor, queries):
-        if isinstance(samples, (list, torch.Tensor)):
-            samples = nested_tensor_from_tensor_list(samples)
-        features, pos = self.backbone(samples)
+        with StopWatch("COTR.forward") as sw:
+            if isinstance(samples, (list, torch.Tensor)):
+                samples = nested_tensor_from_tensor_list(samples)
+            features, pos = self.backbone(samples)
 
-        src, mask = features[-1].decompose()
-        assert mask is not None
-        _b, _q, _ = queries.shape
-        queries = queries.reshape(-1, 2)
-        queries = self.query_proj(queries).reshape(_b, _q, -1)
-        queries = queries.permute(1, 0, 2)
-        hs = self.transformer(self.input_proj(src), mask, queries, pos[-1])[0]
-        outputs_corr = self.corr_embed(hs)
-        out = {'pred_corrs': outputs_corr[-1]}
-        return out
+            src, mask = features[-1].decompose()
+            assert mask is not None
+            _b, _q, _ = queries.shape
+            queries = queries.reshape(-1, 2)
+            queries = self.query_proj(queries).reshape(_b, _q, -1)
+            queries = queries.permute(1, 0, 2)
+            hs = self.transformer(self.input_proj(src), mask, queries, pos[-1])[0]
+            outputs_corr = self.corr_embed(hs)
+            out = {'pred_corrs': outputs_corr[-1]}
+            return out
 
 
 def build(args):

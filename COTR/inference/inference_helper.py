@@ -7,6 +7,7 @@ from torchvision.transforms import functional as tvtf
 from tqdm import tqdm
 import PIL
 
+from COTR.models.cotr_model import COTR
 from COTR.utils import utils, debug_utils
 from COTR.utils.constants import MAX_SIZE
 from COTR.cameras.capture import crop_center_max_np, pad_to_square_np
@@ -29,6 +30,16 @@ def find_prediction_loop(arr):
 
 
 def two_images_side_by_side(img_a, img_b):
+    """img_a と img_b を左右に並べて連結した画像を返す。
+
+    Args:
+        img_a (_type_): _description_
+        img_b (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+    # 画像は同じサイズであること
     assert img_a.shape == img_b.shape, f'{img_a.shape} vs {img_b.shape}'
     assert img_a.dtype == img_b.dtype
     h, w, c = img_a.shape
@@ -38,15 +49,28 @@ def two_images_side_by_side(img_a, img_b):
     return canvas
 
 
-def to_square_patches(img):
+def to_square_patches(img:np.ndarray):
+    """img を 正方形パッチ群に変換する。
+
+    Args:
+        img (np.ndarray): _description_
+
+    Raises:
+        NotImplementedError: _description_
+
+    Returns:
+        _type_: _description_
+    """
     patches = []
     h, w, _ = img.shape
     short = size = min(h, w)
     long = max(h, w)
     if long == short:
+        # 正方形の場合
         patch_0 = ImagePatch(img[:size, :size], 0, 0, size, size, w, h)
         patches = [patch_0]
     elif long <= size * 2:
+        # 長辺が短編の２倍以下の場合
         warnings.warn('Spatial smoothness in dense optical flow is lost, but sparse matching and triangulation should be fine')
         patch_0 = ImagePatch(img[:size, :size], 0, 0, size, size, w, h)
         patch_1 = ImagePatch(img[-size:, -size:], w - size, h - size, size, size, w, h)
@@ -54,6 +78,7 @@ def to_square_patches(img):
         # patches += subdivide_patch(patch_0)
         # patches += subdivide_patch(patch_1)
     else:
+        # 長辺が短編の２倍を超える場合
         raise NotImplementedError
     return patches
 
@@ -102,17 +127,40 @@ def get_patch_centered_at(img, pos, scale=1.0, return_content=True, img_shape=No
         return ImagePatch(None, lu_x, lu_y, size, size, w, h)
 
 
-def cotr_patch_flow_exhaustive(model, patches_a, patches_b):
-    def one_pass(model, img_a, img_b):
+def cotr_patch_flow_exhaustive(model:COTR, patches_a, patches_b):
+    """モデル推論により、パッチからパッチへのオプティカルフロー（全画素の対応付けリスト）を作る
+
+    Args:
+        model (_type_): _description_
+        patches_a (_type_): _description_
+        patches_b (_type_): _description_
+    """
+    def one_pass(model:COTR, img_a, img_b):
+        """img_a から img_b へ全画素クエリーを作成し、推論を実行して、結果の対応づけリストを返す。
+
+        Args:
+            model (_type_): _description_
+            img_a (_type_): _description_
+            img_b (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
         device = next(model.parameters()).device
+        print(f"img_a:{img_a.shape}, img_b:{img_b.shape}")
+        # 画像は正方形であること
         assert img_a.shape[0] == img_a.shape[1]
         assert img_b.shape[0] == img_b.shape[1]
+        # 辺の長さ MAX_SIZE に変換
         img_a = np.array(PIL.Image.fromarray(img_a).resize((MAX_SIZE, MAX_SIZE), resample=PIL.Image.BILINEAR))
         img_b = np.array(PIL.Image.fromarray(img_b).resize((MAX_SIZE, MAX_SIZE), resample=PIL.Image.BILINEAR))
+        # img_a、img_b を左右に並べて連結
         img = two_images_side_by_side(img_a, img_b)
+        # 下記数字タプルは、チャンネルの平均と標準偏差
         img = tvtf.normalize(tvtf.to_tensor(img), (0.485, 0.456, 0.406), (0.229, 0.224, 0.225)).float()[None]
         img = img.to(device)
 
+        # 全画素についてクエリーを作る
         q_list = []
         for i in range(MAX_SIZE):
             queries = []
@@ -120,7 +168,11 @@ def cotr_patch_flow_exhaustive(model, patches_a, patches_b):
                 queries.append([(j) / (MAX_SIZE * 2), i / MAX_SIZE])
             queries = np.array(queries)
             q_list.append(queries)
+        print(f"@one_pass: q_list: total size={len(q_list)*len(q_list[0])}")
+
+        # クエリーを用いて推論(model.forward)する
         if LARGE_GPU:
+            # 大きなGPUの場合：まとめてクエリーを処理
             try:
                 queries = torch.from_numpy(np.concatenate(q_list))[None].float().to(device)
                 out = model.forward(img, queries)['pred_corrs'].detach().cpu().numpy()[0]
@@ -128,24 +180,35 @@ def cotr_patch_flow_exhaustive(model, patches_a, patches_b):
             except:
                 assert 0, 'set LARGE_GPU to False'
         else:
+            # 小さなGPUの場合：一件ずつクエリーを処理
             out_list = []
             for q in q_list:
                 queries = torch.from_numpy(q)[None].float().to(device)
                 out = model.forward(img, queries)['pred_corrs'].detach().cpu().numpy()[0]
                 out_list.append(out)
             out_list = np.array(out_list)
+        out_list_total = sum(len(out) for out in out_list)
+        print(f"@one_pass: out_list: len={len(out_list)}, content type={type(out_list[0])}, total_len={out_list_total}")
+
+        # 確信度（confidence）を計算
         in_grid = torch.from_numpy(np.array(q_list)).float()[None] * 2 - 1
         out_grid = torch.from_numpy(out_list).float()[None] * 2 - 1
         cycle_grid = torch.nn.functional.grid_sample(out_grid.permute(0, 3, 1, 2), out_grid).permute(0, 2, 3, 1)
         confidence = torch.norm(cycle_grid[0, ...] - in_grid[0, ...], dim=-1)
+
+        #
         corr = out_grid[0].clone()
         corr[:, :MAX_SIZE, 0] = corr[:, :MAX_SIZE, 0] * 2 - 1
         corr[:, MAX_SIZE:, 0] = corr[:, MAX_SIZE:, 0] * 2 + 1
         corr = torch.cat([corr, confidence[..., None]], dim=-1).numpy()
+        print(f"@one_pass: corr:shape={corr.shape}")
         return corr[:, :MAX_SIZE, :], corr[:, MAX_SIZE:, :]
+    # END of one_pass()
+
     corrs_a = []
     corrs_b = []
-
+    print(f"len(patches_a)={len(patches_a)}, type{type(patches_a[0])}, patch.shape={patches_a[0].patch.shape}")
+    print(f"len(patches_b)={len(patches_b)}, type{type(patches_b[0])}, patch.shape={patches_b[0].patch.shape}")
     for p_i in patches_a:
         for p_j in patches_b:
             c_i, c_j = one_pass(model, p_i.patch, p_j.patch)
@@ -162,16 +225,23 @@ def cotr_patch_flow_exhaustive(model, patches_a, patches_b):
             c_j = ImagePatch(c_j, p_j.x, p_j.y, p_j.w, p_j.h, p_j.ow, p_j.oh)
             corrs_a.append(c_i)
             corrs_b.append(c_j)
+    print(f"corrs_a:list of {type(corrs_a[0])}, len={len(corrs_a)}")
+    print(f"corrs_b:list of {type(corrs_b[0])}, len={len(corrs_b)}")
     return corrs_a, corrs_b
 
 
 def cotr_flow(model, img_a, img_b):
     # assert img_a.shape[0] == img_a.shape[1]
     # assert img_b.shape[0] == img_b.shape[1]
+
+    # img の正方形パッチを作る
     patches_a = to_square_patches(img_a)
     patches_b = to_square_patches(img_b)
 
+    # オプティカルフローを求める
     corrs_a, corrs_b = cotr_patch_flow_exhaustive(model, patches_a, patches_b)
+
+
     corr_a, con_a, cmap_a = merge_flow_patches(corrs_a)
     corr_b, con_b, cmap_b = merge_flow_patches(corrs_b)
 
