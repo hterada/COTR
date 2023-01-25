@@ -14,6 +14,8 @@ import matplotlib.pyplot as plt
 import torchprof
 
 from COTR.utils import utils, debug_utils
+from COTR.utils.stopwatch import StopWatch
+
 from COTR.models import build_model
 from COTR.options.options import *
 from COTR.options.options_utils import *
@@ -37,17 +39,18 @@ def main(opt):
     queries = np.load('./sample_data/face_landmarks.npy')[0]
 
     engine = SparseEngine(model, 32, mode='stretching')
-    with torchprof.Profile(model, use_cuda=True, profile_memory=True) as prof:
-        t0 = time.time()
-        print(f"start:{t0}")
+    # with torchprof.Profile(model, use_cuda=True, profile_memory=True) as prof:
+    t0 = time.time()
+    with StopWatch("cotr_corr_multiscale") as sw:
         # corrs: ndarray
         corrs = engine.cotr_corr_multiscale(img_a, img_b, np.linspace(0.5, 0.0625, 4), 1, queries_a=queries, force=False)
-        t1 = time.time()
-        # ANA:
-        for corr in corrs:
-            print(f"corr:{corr}, {type(corr)}")
-        print(f'spent {t1-t0} seconds for {len(corrs)} correspondences.')
-    print(prof.display(show_events=False))
+    t1 = time.time()
+    # ANA:
+    for corr in corrs:
+        print(f"corr:{corr}, {type(corr)}")
+    print(f'spent {t1-t0} seconds for {len(corrs)} correspondences.')
+    # print(prof.display(show_events=False))
+    print(StopWatch.dump_sum())
 
     f, axarr = plt.subplots(1, 2)
     axarr[0].imshow(img_a)
