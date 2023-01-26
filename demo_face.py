@@ -40,15 +40,18 @@ def main(opt):
 
     engine = SparseEngine(model, 32, mode='stretching')
     # with torchprof.Profile(model, use_cuda=True, profile_memory=True) as prof:
-    t0 = time.time()
     with StopWatch("cotr_corr_multiscale") as sw:
         # corrs: ndarray
+        t0 = time.time()
         corrs = engine.cotr_corr_multiscale(img_a, img_b, np.linspace(0.5, 0.0625, 4), 1, queries_a=queries, force=False)
-    t1 = time.time()
+        t1 = time.time()
+        print(f'spent {t1-t0} seconds for {len(corrs)} correspondences.')
+    df = sw.to_DataFrame()
+    df.to_csv("out/demo_face_sw.csv", sep=",")
+    print(df)
     # ANA:
     # for corr in corrs:
     #     print(f"corr:{corr}, {type(corr)}")
-    print(f'spent {t1-t0} seconds for {len(corrs)} correspondences.')
     # print(prof.display(show_events=False))
 
     f, axarr = plt.subplots(1, 2)
