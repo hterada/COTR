@@ -1,5 +1,6 @@
 from typing import List
 import time
+from collections import OrderedDict
 
 class StopWatch:
     """Python の with 構文にもとづくストップウォッチ。withブロック内の所要時間を計測する。
@@ -24,12 +25,12 @@ class StopWatch:
         if str(self.name_path) not in StopWatch.dic_sum.keys():
             __class__.dic_sum[str(self.name_path)] = 0
             __class__.dic_count[str(self.name_path)] = 0
-            __class__.dic_child_names[str(self.name_path)] = set()
+            __class__.dic_child_names[str(self.name_path)] = OrderedDict()
 
     def __enter__(self):
         if len(__class__.stack) > 0:
             str_parent_name_path = str(__class__.stack[-1].name_path)
-            __class__.dic_child_names[str_parent_name_path].add(self.name)
+            __class__.dic_child_names[str_parent_name_path][self.name] = True
         __class__.stack.append(self)
         self.t0 = time.time()
         return self
@@ -49,9 +50,22 @@ class StopWatch:
         sum = __class__.dic_sum[str(name_path)]*1000
         count = __class__.dic_count[str(name_path)]
         level = len(name_path)-1
-        print(f"SW:[{'.'*level}{name_path[-1]}] time sum:{sum:.3f} count:{count} avg:{sum/count:.3f}")
-        for child_name in __class__.dic_child_names[str(name_path)]:
+
+        if len(name_path) >= 2:
+            parent_sum = self.get_parent_sum(name_path)
+        else:
+            # no parent
+            parent_sum = sum
+        print(f"SW:[{'.'*level+name_path[-1]:40}] time sum:{sum:8.3f} count:{count:4} avg:{sum/count:8.3f} parent %:{sum/parent_sum*100.0:6.2f}")
+        for child_name in __class__.dic_child_names[str(name_path)].keys():
             child_name_path = list(name_path) #copy
             child_name_path.append(child_name)
             self.print(child_name_path)
+
+    def get_parent_sum(self, child_name_path:List[str])->List[str]:
+        if len(child_name_path) < 2:
+            # no parent
+            raise ValueError("no parent")
+        parent_name_path = child_name_path[:-1]
+        return __class__.dic_sum[str(parent_name_path)]*1000
 
