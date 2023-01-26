@@ -194,7 +194,7 @@ class TransformerDecoderLayer(nn.Module):
                 memory_key_padding_mask: Optional[Tensor] = None,
                 pos: Optional[Tensor] = None,
                 query_pos: Optional[Tensor] = None):
-        with StopWatch("TransformerDecoderLayer") as sw:
+        with StopWatch("TransformerDecoderLayer.forward") as sw:
             tgt2 = self.multihead_attn(query=self.with_pos_embed(tgt, query_pos),
                                     key=self.with_pos_embed(memory, pos),
                                     value=memory, attn_mask=memory_mask,

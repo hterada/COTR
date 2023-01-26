@@ -46,11 +46,10 @@ def main(opt):
         corrs = engine.cotr_corr_multiscale(img_a, img_b, np.linspace(0.5, 0.0625, 4), 1, queries_a=queries, force=False)
     t1 = time.time()
     # ANA:
-    for corr in corrs:
-        print(f"corr:{corr}, {type(corr)}")
+    # for corr in corrs:
+    #     print(f"corr:{corr}, {type(corr)}")
     print(f'spent {t1-t0} seconds for {len(corrs)} correspondences.')
     # print(prof.display(show_events=False))
-    print(StopWatch.dump_sum())
 
     f, axarr = plt.subplots(1, 2)
     axarr[0].imshow(img_a)
