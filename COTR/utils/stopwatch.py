@@ -56,7 +56,10 @@ class StopWatch:
         else:
             # no parent
             parent_sum = sum
-        print(f"SW:[{'.'*level+name_path[-1]:40}] time sum:{sum:8.3f} count:{count:4} avg:{sum/count:8.3f} parent %:{sum/parent_sum*100.0:6.2f}")
+
+        # root sum
+        root_sum = __class__.dic_sum[str(name_path[:1])]*1000
+        print(f"SW:[{'.'*level+name_path[-1]:40}] time sum:{sum:8.3f} count:{count:4} avg:{sum/count:8.3f} {sum/root_sum*100.0:6.2f}%")
         for child_name in __class__.dic_child_names[str(name_path)].keys():
             child_name_path = list(name_path) #copy
             child_name_path.append(child_name)
