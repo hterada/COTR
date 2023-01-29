@@ -22,9 +22,8 @@ class MLP(nn.Module):
         self.layers = nn.ModuleList(nn.Linear(n, k) for n, k in zip([input_dim] + h, h + [output_dim]))
 
     def forward(self, x):
-        with StopWatch("MLP.forward") as sw:
-            for i, layer in enumerate(self.layers):
-                x = F.relu(layer(x)) if i < self.num_layers - 1 else layer(x)
+        for i, layer in enumerate(self.layers):
+            x = F.relu(layer(x)) if i < self.num_layers - 1 else layer(x)
         return x
 
 
@@ -42,9 +41,8 @@ class NerfPositionalEncoding(nn.Module):
 
     @torch.no_grad()
     def forward(self, inputs):
-        with StopWatch("NerfPositionalEncoding.forward") as sw:
-            out = torch.cat([torch.sin(i * math.pi * inputs) for i in self.bases] + [torch.cos(i * math.pi * inputs) for i in self.bases], axis=-1)
-            assert torch.isnan(out).any() == False
+        out = torch.cat([torch.sin(i * math.pi * inputs) for i in self.bases] + [torch.cos(i * math.pi * inputs) for i in self.bases], axis=-1)
+        assert torch.isnan(out).any() == False
         return out
 
 
@@ -62,17 +60,16 @@ class PositionEmbeddingSine(nn.Module):
 
     @torch.no_grad()
     def forward(self, tensor_list: NestedTensor):
-        with StopWatch("PositionEmbeddingSine.forward") as sw:
-            x = tensor_list.tensors
-            mask = tensor_list.mask
-            assert mask is not None
-            not_mask = ~mask
-            y_embed = not_mask.cumsum(1, dtype=torch.float32)
-            x_embed = not_mask.cumsum(2, dtype=torch.float32)
-            eps = 1e-6
-            y_embed = (y_embed-0.5) / (y_embed[:, -1:, :] + eps)
-            x_embed = (x_embed-0.5) / (x_embed[:, :, -1:] + eps)
-            pos = torch.stack([x_embed, y_embed], dim=-1)
+        x = tensor_list.tensors
+        mask = tensor_list.mask
+        assert mask is not None
+        not_mask = ~mask
+        y_embed = not_mask.cumsum(1, dtype=torch.float32)
+        x_embed = not_mask.cumsum(2, dtype=torch.float32)
+        eps = 1e-6
+        y_embed = (y_embed-0.5) / (y_embed[:, -1:, :] + eps)
+        x_embed = (x_embed-0.5) / (x_embed[:, :, -1:] + eps)
+        pos = torch.stack([x_embed, y_embed], dim=-1)
         return self.sine(pos).permute(0, 3, 1, 2)
 
 

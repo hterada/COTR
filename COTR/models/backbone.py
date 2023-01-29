@@ -45,16 +45,15 @@ class FrozenBatchNorm2d(torch.nn.Module):
             missing_keys, unexpected_keys, error_msgs)
 
     def forward(self, x):
-        with StopWatch("FrozenBatchNorm2d.forward") as sw:
-            # move reshapes to the beginning
-            # to make it fuser-friendly
-            w = self.weight.reshape(1, -1, 1, 1)
-            b = self.bias.reshape(1, -1, 1, 1)
-            rv = self.running_var.reshape(1, -1, 1, 1)
-            rm = self.running_mean.reshape(1, -1, 1, 1)
-            eps = 1e-5
-            scale = w * (rv + eps).rsqrt()
-            bias = b - rm * scale
+        # move reshapes to the beginning
+        # to make it fuser-friendly
+        w = self.weight.reshape(1, -1, 1, 1)
+        b = self.bias.reshape(1, -1, 1, 1)
+        rv = self.running_var.reshape(1, -1, 1, 1)
+        rm = self.running_mean.reshape(1, -1, 1, 1)
+        eps = 1e-5
+        scale = w * (rv + eps).rsqrt()
+        bias = b - rm * scale
         return x * scale + bias
 
 
@@ -79,19 +78,18 @@ class BackboneBase(nn.Module):
         return y['0']
 
     def forward(self, tensor_list: NestedTensor):
-        with StopWatch("BackboneBase.forward") as sw:
-            assert tensor_list.tensors.shape[-2:] == (constants.MAX_SIZE, constants.MAX_SIZE * 2)
-            left = self.body(tensor_list.tensors[..., 0:constants.MAX_SIZE])
-            right = self.body(tensor_list.tensors[..., constants.MAX_SIZE:2 * constants.MAX_SIZE])
-            xs = {}
-            for k in left.keys():
-                xs[k] = torch.cat([left[k], right[k]], dim=-1)
-            out: Dict[str, NestedTensor] = {}
-            for name, x in xs.items():
-                m = tensor_list.mask
-                assert m is not None
-                mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
-                out[name] = NestedTensor(x, mask)
+        assert tensor_list.tensors.shape[-2:] == (constants.MAX_SIZE, constants.MAX_SIZE * 2)
+        left = self.body(tensor_list.tensors[..., 0:constants.MAX_SIZE])
+        right = self.body(tensor_list.tensors[..., constants.MAX_SIZE:2 * constants.MAX_SIZE])
+        xs = {}
+        for k in left.keys():
+            xs[k] = torch.cat([left[k], right[k]], dim=-1)
+        out: Dict[str, NestedTensor] = {}
+        for name, x in xs.items():
+            m = tensor_list.mask
+            assert m is not None
+            mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
+            out[name] = NestedTensor(x, mask)
         return out
 
 

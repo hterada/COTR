@@ -26,21 +26,27 @@ class COTR(nn.Module):
         self.backbone = backbone
 
     def forward(self, samples: NestedTensor, queries):
-        with StopWatch("COTR.forward") as sw:
-            if isinstance(samples, (list, torch.Tensor)):
-                samples = nested_tensor_from_tensor_list(samples)
+        if isinstance(samples, (list, torch.Tensor)):
+            samples = nested_tensor_from_tensor_list(samples)
+
+        # backbone
+        with StopWatch("backbone") as sw:
             features, pos = self.backbone(samples)
 
-            src, mask = features[-1].decompose()
-            assert mask is not None
-            _b, _q, _ = queries.shape
-            queries = queries.reshape(-1, 2)
+        src, mask = features[-1].decompose()
+        assert mask is not None
+        _b, _q, _ = queries.shape
+        queries = queries.reshape(-1, 2)
+
+        with StopWatch("NerfPositionalEncoding") as sw:
             queries = self.query_proj(queries).reshape(_b, _q, -1)
-            queries = queries.permute(1, 0, 2)
+        queries = queries.permute(1, 0, 2)
+
+        with StopWatch("Transformaer") as sw:
             hs = self.transformer(self.input_proj(src), mask, queries, pos[-1])[0]
-            outputs_corr = self.corr_embed(hs)
-            out = {'pred_corrs': outputs_corr[-1]}
-            return out
+        outputs_corr = self.corr_embed(hs)
+        out = {'pred_corrs': outputs_corr[-1]}
+        return out
 
 
 def build(args):
