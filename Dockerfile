@@ -19,12 +19,13 @@ COPY environment.yml .
 RUN conda env create -f environment.yml
 RUN conda init bash
 # replace shell
-SHELL ["conda", "run", "-n", "cotr_env", "/bin/bash", "-c"]
-RUN conda info -e
-RUN conda install -c conda-forge glfw
-RUN pip install torchprof
-RUN conda install pandas
-RUN conda update --all
+# SHELL ["conda", "run", "-n", "cotr_env", "/bin/bash", "-c"]
+# RUN conda info -e
+RUN conda install -c conda-forge -n cotr_env glfw -y
+RUN conda run -n cotr_env /bin/bash -c "pip install torchprof"
+RUN conda install -n cotr_env pandas -y
+RUN conda update -n cotr_env --all -y
+RUN conda install pytorch torchvision==0.13.1 torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia -n cotr_env -y
 
 VOLUME ["/COTR"]
 WORKDIR /COTR
