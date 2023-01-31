@@ -67,7 +67,7 @@ class StopWatch:
     def to_DataFrame(self)->pd.DataFrame:
         l_out:List[Any] = []
         data = self.make_table(l_out, self.name_path)
-        columns = ["name", "sum", "count", "avg", "% of root"]
+        columns = ["name", "sum", "count", "avg", "% of parent"]
         df = pd.DataFrame(data, columns=columns)
         return df
 
