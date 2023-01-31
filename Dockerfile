@@ -26,6 +26,7 @@ RUN conda run -n cotr_env /bin/bash -c "pip install torchprof"
 RUN conda install -n cotr_env pandas -y
 RUN conda update -n cotr_env --all -y
 RUN conda install pytorch torchvision==0.13.1 torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia -n cotr_env -y
+RUN conda clean --all -y
 
 VOLUME ["/COTR"]
 WORKDIR /COTR
