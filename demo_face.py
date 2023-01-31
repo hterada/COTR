@@ -11,7 +11,7 @@ import numpy as np
 import torch
 import imageio
 import matplotlib.pyplot as plt
-import torchprof
+# import torchprof
 
 from COTR.utils import utils, debug_utils
 from COTR.utils.stopwatch import StopWatch
@@ -21,6 +21,8 @@ from COTR.options.options import *
 from COTR.options.options_utils import *
 from COTR.inference.inference_helper import triangulate_corr
 from COTR.inference.sparse_engine import SparseEngine
+
+from pytorch_memlab import MemReporter
 
 utils.fix_randomness(0)
 torch.set_grad_enabled(False)
@@ -33,6 +35,8 @@ def main(opt):
     utils.safe_load_weights(model, weights)
     # eval(): switch to inference mode
     model = model.eval()
+    mem_rep = MemReporter(model)
+    mem_rep.report()
 
     img_a = imageio.imread('./sample_data/imgs/face_1.png', pilmode='RGB')
     img_b = imageio.imread('./sample_data/imgs/face_2.png', pilmode='RGB')
@@ -49,10 +53,9 @@ def main(opt):
     df = sw.to_DataFrame()
     df.to_csv("out/demo_face_sw.csv", sep=",")
     print(df)
-    # ANA:
-    # for corr in corrs:
-    #     print(f"corr:{corr}, {type(corr)}")
-    # print(prof.display(show_events=False))
+
+    mem_rep.report()
+
 
     f, axarr = plt.subplots(1, 2)
     axarr[0].imshow(img_a)

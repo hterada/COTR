@@ -16,6 +16,8 @@ from COTR.utils.utils import code_location
 from COTR.utils.stopwatch import StopWatch
 from COTR.cameras.capture import stretch_to_square_np
 
+from pytorch_memlab import profile
+
 
 class SparseEngine():
     def __init__(self, model, batch_size, mode='stretching'):
@@ -60,6 +62,7 @@ class SparseEngine():
         query_batch = torch.stack(query_batch)
         return task_ref, img_batch, query_batch
 
+    @profile
     def infer_batch(self, img_batch, query_batch)->np.ndarray:
         """img_batch, query_batch について model 推論を行い、結果を返す。
 
@@ -73,17 +76,19 @@ class SparseEngine():
         Returns:
             _type_: _description_
         """
-        self.total_tasks += img_batch.shape[0]
-        device = next(self.model.parameters()).device
-        img_batch = img_batch.to(device)
-        query_batch = query_batch.to(device)
+        with StopWatch("pre") as sw:
+            self.total_tasks += img_batch.shape[0]
+            device = next(self.model.parameters()).device
+            img_batch = img_batch.to(device)
+            query_batch = query_batch.to(device)
         # 推論実行
         with StopWatch("COTR.forward") as sw:
             out = self.model(img_batch, query_batch)['pred_corrs'].clone().detach()
-        out = out.cpu().numpy()[:, 0, :]
-        if utils.has_nan(out):
-            raise ValueError('NaN in prediction')
-        return out
+        with StopWatch("post") as sw:
+            out = out.cpu().numpy()[:, 0, :]
+            if utils.has_nan(out):
+                raise ValueError('NaN in prediction')
+            return out
 
     def conclude_tasks(self, tasks:List[RefinementTask], return_idx=False, force=False,
                        offset_x_from=0,
@@ -316,11 +321,12 @@ class SparseEngine():
                 break
 
             with StopWatch("infer_batch") as sw:
-            # 推論実行
+                # 推論実行
                 out = self.infer_batch(img_batch, query_batch)
             # タスクのズームを一歩進める
             for t, o in zip(task_ref, out):
                 t.step(o)
+
         if return_tasks_only:
             return tasks
 
