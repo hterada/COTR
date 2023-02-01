@@ -62,7 +62,6 @@ class SparseEngine():
         query_batch = torch.stack(query_batch)
         return task_ref, img_batch, query_batch
 
-    @profile
     def infer_batch(self, img_batch, query_batch)->np.ndarray:
         """img_batch, query_batch について model 推論を行い、結果を返す。
 
@@ -183,6 +182,7 @@ class SparseEngine():
         Returns:
             _type_: _description_
         """
+        print(code_location())
         if areas is not None:
             # (A) areas が指定されている場合
             assert queries_a is not None
@@ -293,6 +293,48 @@ class SparseEngine():
         # for task in tasks:
         #     print(f"@gen_tasks:task={task}")
         return tasks
+
+
+    def cotr_corr_once(self, img_a, img_b, queries):
+        print(code_location())
+        img_a = img_a.copy()
+        img_b = img_b.copy()
+        img_a_shape = img_a.shape[:2]
+        img_b_shape = img_b.shape[:2]
+        print(f"img_a: shape={img_a_shape}")
+        print(f"img_b: shape={img_b_shape}")
+
+        # 1.
+        with StopWatch("gen_tasks") as sw:
+            tasks = self.gen_tasks(img_a, img_b, queries_a=queries)
+        print(f"tasks:type={type(tasks)}, len={len(tasks)}")
+        print(f"tasks[0]:type={type(tasks[0])}, {tasks[0]}")
+        return None
+
+        # # 2.
+        # with StopWatch("form_batch") as sw:
+        #     task_ref, img_batch, query_batch = self.form_batch(tasks)
+
+        # with StopWatch("infer_batch") as sw:
+        #     # 推論実行
+        #     out = self.infer_batch(img_batch, query_batch)
+
+        # with StopWatch("conclude_tasks") as sw:
+        #     if return_idx:
+        #         # タスクの「結論」をだす
+        #         corrs, idx = self.conclude_tasks(tasks, return_idx=True, force=force,
+        #                                             img_a_shape=img_a_shape,
+        #                                             img_b_shape=img_b_shape,)
+        #         corrs = corrs[:max_corrs]
+        #         idx = idx[:max_corrs]
+        #         return corrs, idx # 対応づけ情報と、idx とを共に返す。
+        #     else:
+        #         # タスクの結論をだす。
+        #         corrs = self.conclude_tasks(tasks, force=force,
+        #                                     img_a_shape=img_a_shape,
+        #                                     img_b_shape=img_b_shape,)
+        #         corrs = corrs[:max_corrs]
+        #         return corrs # 対応付け情報を返す。
 
     def cotr_corr_multiscale(self, img_a, img_b, zoom_ins=[1.0], converge_iters=1, max_corrs=1000, queries_a=None, return_idx=False, force=False, return_tasks_only=False, areas=None):
         '''
