@@ -40,6 +40,8 @@ class StopWatch:
 
     def __exit__(self, exc_type, exc_val, exc_tb ):
         self.t1 = time.time()
+        if exc_type is not None:
+            raise exc_type(exc_val)
         # record
         __class__.dic_sum[str(self.name_path)] += (self.t1 - self.t0)
         __class__.dic_count[str(self.name_path)] += 1
