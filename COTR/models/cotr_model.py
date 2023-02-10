@@ -15,7 +15,7 @@ from .transformer import build_transformer
 from .position_encoding import NerfPositionalEncoding, MLP
 
 from COTR.utils.stopwatch import StopWatch
-
+from COTR.utils.utils import TR
 from pytorch_memlab import profile
 
 
@@ -47,8 +47,14 @@ class COTR(nn.Module):
         queries = queries.reshape(-1, 2)
 
         with StopWatch("NerfPositionalEncoding") as sw:
+            TR(f"BEFORE P.E. queries:{queries.shape}")
+            # queries.shape = (*,2)
             queries = self.query_proj(queries).reshape(_b, _q, -1)
+            TR(f"AFTER  P.E. queries:{queries.shape}")
+            # queries.shape = (1, *, 256)
         queries = queries.permute(1, 0, 2)
+        TR(f"AFTER2  P.E. queries:{queries.shape}")
+        # queries.shape = (*, 1, 256)
 
         with StopWatch("Transformaer") as sw:
             hs = self.transformer(self.input_proj(src), mask, queries, pos[-1])[0]
