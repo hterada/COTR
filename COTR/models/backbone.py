@@ -16,6 +16,9 @@ from .misc import NestedTensor
 from .position_encoding import build_position_encoding
 from COTR.utils import debug_utils, constants
 from COTR.utils.stopwatch import StopWatch
+from COTR.utils.utils import TR
+
+from pytorch_memlab import profile
 
 
 class FrozenBatchNorm2d(torch.nn.Module):
@@ -61,14 +64,20 @@ class BackboneBase(nn.Module):
 
     def __init__(self, backbone: nn.Module, train_backbone: bool, num_channels: int, return_interm_layers: bool, layer='layer3'):
         super().__init__()
+        # MEMO:
+        TR(backbone)
+
         for name, parameter in backbone.named_parameters():
             if not train_backbone or 'layer2' not in name and 'layer3' not in name and 'layer4' not in name:
                 parameter.requires_grad_(False)
                 print(f'freeze {name}')
+            else:
+                print(f'no frz {name}')
         if return_interm_layers:
             return_layers = {"layer1": "0", "layer2": "1", "layer3": "2", "layer4": "3"}
         else:
             return_layers = {layer: "0"}
+        TR(f"return_layers:{return_layers}")
         self.body = IntermediateLayerGetter(backbone, return_layers=return_layers)
         self.num_channels = num_channels
 
@@ -77,10 +86,14 @@ class BackboneBase(nn.Module):
         assert len(y.keys()) == 1
         return y['0']
 
+    #@profile
     def forward(self, tensor_list: NestedTensor):
         assert tensor_list.tensors.shape[-2:] == (constants.MAX_SIZE, constants.MAX_SIZE * 2)
+        TR(f"BackboneBase: INPUT tensor_list:{tensor_list.tensors.shape}")
         left = self.body(tensor_list.tensors[..., 0:constants.MAX_SIZE])
         right = self.body(tensor_list.tensors[..., constants.MAX_SIZE:2 * constants.MAX_SIZE])
+        TR(f"left : {[(k, v.shape) for k,v in left.items()]}")
+        TR(f"right: {[(k, v.shape) for k,v in right.items()]}")
         xs = {}
         for k in left.keys():
             xs[k] = torch.cat([left[k], right[k]], dim=-1)
@@ -90,6 +103,9 @@ class BackboneBase(nn.Module):
             assert m is not None
             mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
             out[name] = NestedTensor(x, mask)
+        TR(f"BackboneBase out:{len(out)}")
+        TR(f"BackboneBase out:{ [(k, type(v.tensors), v.tensors.shape) for k,v in out.items()] }")
+        TR(f"BackboneBase out.keys():{out.keys()}")
         return out
 
 
@@ -102,6 +118,7 @@ class Backbone(BackboneBase):
                  dilation: bool,
                  layer='layer3',
                  num_channels=1024):
+        # getattr() で、動的にクラス名 name のコンストラクタを実行
         backbone = getattr(torchvision.models, name)(
             replace_stride_with_dilation=[False, False, dilation],
             pretrained=True, norm_layer=FrozenBatchNorm2d)
@@ -113,6 +130,7 @@ class Joiner(nn.Sequential):
         super().__init__(backbone, position_embedding)
 
     def forward(self, tensor_list: NestedTensor):
+        TR(f"Joiner: INPUT tensor_list:{tensor_list.tensors.shape}")
         xs = self[0](tensor_list)
         out: List[NestedTensor] = []
         pos = []
@@ -121,6 +139,7 @@ class Joiner(nn.Sequential):
             # position encoding
             pos.append(self[1](x).to(x.tensors.dtype))
 
+        TR(f"Joiner: OUTPUT: out:{out[0].tensors.shape}, pos:{pos[0].shape}")
         return out, pos
 
 
@@ -130,6 +149,7 @@ def build_backbone(args):
         train_backbone = args.lr_backbone > 0
     else:
         train_backbone = False
+    TR(f"train_backbone:{train_backbone}")
     backbone = Backbone(args.backbone, train_backbone, False, args.dilation, layer=args.layer, num_channels=args.dim_feedforward)
     model = Joiner(backbone, position_embedding)
     model.num_channels = backbone.num_channels

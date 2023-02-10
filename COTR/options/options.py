@@ -40,7 +40,7 @@ def set_nn_arguments(parser):
 
 def set_COTR_arguments(parser):
     cotr_arg = parser.add_argument_group('COTR model')
-    cotr_arg.add_argument('--backbone', type=str, default='resnet50')
+    cotr_arg.add_argument('--backbone', type=str, default='resnet50') #MEMO:
     cotr_arg.add_argument('--hidden_dim', type=int, default=256)
     cotr_arg.add_argument('--dilation', type=str2bool, default=False)
     cotr_arg.add_argument('--dropout', type=float, default=0.1)

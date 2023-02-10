@@ -14,7 +14,6 @@ import matplotlib.pyplot as plt
 # import torchprof
 
 from COTR.utils import utils, debug_utils
-from COTR.utils.utils import code_location
 from COTR.utils.stopwatch import StopWatch
 
 from COTR.models import build_model
@@ -36,7 +35,7 @@ def main(opt):
     utils.safe_load_weights(model, weights)
 
     # eval(): switch to inference mode
-    # model = model.eval()
+    model = model.eval()
     # mem_rep = MemReporter(model)
     # # print(">>>>>> MemReporter 1.")
     # mem_rep.report()
@@ -44,6 +43,7 @@ def main(opt):
     img_a = imageio.imread('./sample_data/imgs/face_1.png', pilmode='RGB')
     img_b = imageio.imread('./sample_data/imgs/face_2.png', pilmode='RGB')
     queries = np.load('./sample_data/face_landmarks.npy')[0]
+    print(f"queries:len={len(queries)}\n{queries}")
 
     engine = SparseEngine(model, 32, mode='stretching')
     # with torchprof.Profile(model, use_cuda=True, profile_memory=True) as prof:

@@ -1,3 +1,4 @@
+from typing import Union
 import math
 
 import numpy as np
@@ -6,12 +7,16 @@ import torch.nn.functional as F
 from torch import nn
 
 from COTR.utils import debug_utils, constants, utils
+from COTR.utils.utils import TR
+
 from .misc import (NestedTensor, nested_tensor_from_tensor_list)
 from .backbone import build_backbone
 from .transformer import build_transformer
 from .position_encoding import NerfPositionalEncoding, MLP
 
 from COTR.utils.stopwatch import StopWatch
+
+from pytorch_memlab import profile
 
 
 class COTR(nn.Module):
@@ -25,7 +30,10 @@ class COTR(nn.Module):
         self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
         self.backbone = backbone
 
-    def forward(self, samples: NestedTensor, queries):
+    @profile
+    def forward(self, samples: Union[torch.Tensor, NestedTensor], queries):
+        if type(samples)==torch.Tensor:
+            TR(f"COTR INPUT: samples:{samples.shape} queries:{queries.shape}")
         if isinstance(samples, (list, torch.Tensor)):
             samples = nested_tensor_from_tensor_list(samples)
 
@@ -46,6 +54,7 @@ class COTR(nn.Module):
             hs = self.transformer(self.input_proj(src), mask, queries, pos[-1])[0]
         outputs_corr = self.corr_embed(hs)
         out = {'pred_corrs': outputs_corr[-1]}
+        TR(f"COTR OUTPUT: out:{outputs_corr[-1].shape}")
         return out
 
 

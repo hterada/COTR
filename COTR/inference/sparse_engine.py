@@ -12,7 +12,7 @@ import torch
 from COTR.inference.inference_helper import THRESHOLD_SPARSE, THRESHOLD_AREA, cotr_flow, cotr_corr_base
 from COTR.inference.refinement_task import RefinementTask
 from COTR.utils import debug_utils, utils
-from COTR.utils.utils import code_location
+from COTR.utils.utils import TR
 from COTR.utils.stopwatch import StopWatch
 from COTR.cameras.capture import stretch_to_square_np
 
@@ -182,7 +182,7 @@ class SparseEngine():
         Returns:
             _type_: _description_
         """
-        print(code_location())
+        TR()
         if areas is not None:
             # (A) areas が指定されている場合
             assert queries_a is not None
@@ -190,7 +190,7 @@ class SparseEngine():
             assert max_corrs >= queries_a.shape[0]
             return self.gen_tasks_w_known_scale(img_a, img_b, queries_a, areas, zoom_ins=zoom_ins, converge_iters=converge_iters, max_corrs=max_corrs)
         # (B) areas が指定されていない場合
-        print(f"@gen_tasks: mode={self.mode}")
+        TR(f"@gen_tasks: areas は指定されていない。mode={self.mode}")
         if self.mode == 'stretching':
             if img_a.shape[0] != img_a.shape[1] or img_b.shape[0] != img_b.shape[1]:
                 # img_a, img_b のどちらかが正方形ではない場合
@@ -233,7 +233,7 @@ class SparseEngine():
         tasks = []
 
         if queries_a is None:
-            print(code_location())
+            TR()
             index_a = np.where(mask_a)
             index_a = np.array(index_a).T
             index_a = index_a[np.random.choice(len(index_a), size=min(max_corrs, len(index_a)))]
@@ -253,16 +253,16 @@ class SparseEngine():
                 loc_to = (corr_b[tuple(np.floor(pos).astype('int'))].copy() * 0.5 + 0.5) * img_a.shape[:2][::-1]
                 tasks.append(RefinementTask(img_a, img_b, loc_to, loc_from, area_a, area_b, converge_iters, zoom_ins))
         else:
-            print(code_location())
+            TR()
             if force:
-                print(code_location())
+                TR()
                 for i, loc_from in enumerate(queries_a):
                     pos = loc_from[::-1]
                     pos = np.array([np.clip(pos[0], 0, corr_a.shape[0] - 1), np.clip(pos[1], 0, corr_a.shape[1] - 1)], dtype=np.int)
                     loc_to = (corr_a[tuple(pos)].copy() * 0.5 + 0.5) * img_b.shape[:2][::-1]
                     tasks.append(RefinementTask(img_a, img_b, loc_from, loc_to, area_a, area_b, converge_iters, zoom_ins, identifier=i))
             else:
-                print(code_location())
+                TR()
                 for i, loc_from in enumerate(queries_a):
                     pos = loc_from[::-1]
                     print(f"pos:{pos}")
@@ -276,7 +276,7 @@ class SparseEngine():
                     else:
                         print("SKIP2")
                 if len(tasks) < max_corrs:
-                    print(code_location())
+                    TR()
                     extra = max_corrs - len(tasks)
                     counter = 0
                     for i, loc_from in enumerate(queries_a):
@@ -296,7 +296,7 @@ class SparseEngine():
 
 
     def cotr_corr_once(self, img_a, img_b, queries):
-        print(code_location())
+        TR()
         img_a = img_a.copy()
         img_b = img_b.copy()
         img_a_shape = img_a.shape[:2]

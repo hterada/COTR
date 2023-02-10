@@ -271,6 +271,20 @@ def visualize_corrs(img1, img2, corrs, mask=None):
     plt.show()
 
 import inspect
-def code_location():
-    frame = inspect.currentframe().f_back
-    return f"FILE {frame.f_code.co_filename}, line {frame.f_lineno}, in {frame.f_code.co_name}"
+def code_location(frame=None):
+    if frame is None:
+        frm = inspect.currentframe().f_back
+    # frame = frm.f_back # 1-level upper of frame
+    ret = f"{frame.f_code.co_filename}({frame.f_lineno})"
+    del frame
+    return ret
+
+def TR(msg=''):
+    """Tracer
+
+    Args:
+        msg (str, optional): _description_. Defaults to ''.
+    """
+    cl = code_location(inspect.currentframe().f_back)
+
+    print(f"TR@ {cl}:{msg}")
