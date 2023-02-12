@@ -28,6 +28,7 @@ RUN conda update -n cotr_env --all -y
 RUN conda install pytorch torchvision==0.13.1 torchaudio pytorch-cuda=11.7 -c pytorch -c nvidia -n cotr_env -y
 RUN conda clean --all -y
 RUN conda run -n cotr_env pip install pytorch_memlab
+RUN conda run -n cotr_env pip install jupyterlab
 
 VOLUME ["/COTR"]
 WORKDIR /COTR
