@@ -30,6 +30,8 @@ RUN conda clean --all -y
 RUN conda run -n cotr_env pip install pytorch_memlab
 RUN conda install -n cotr_env jupyterlab ipywidgets -y
 RUN conda install -n cotr_env -c conda-forge torchinfo -y
+RUN conda run -n cotr_env pip install jupyterlab_tabnine
+
 
 VOLUME ["/COTR"]
 WORKDIR /COTR

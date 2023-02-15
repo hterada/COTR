@@ -36,7 +36,8 @@ def main(opt):
     # eval(): switch to inference mode
     model = model.eval()
     mem_rep = MemReporter(model)
-    mem_rep.report()
+    # print(">>>>>> MemReporter 1.")
+    # mem_rep.report()
 
     img_a = imageio.imread('./sample_data/imgs/face_1.png', pilmode='RGB')
     img_b = imageio.imread('./sample_data/imgs/face_2.png', pilmode='RGB')
@@ -54,7 +55,8 @@ def main(opt):
     df.to_csv("out/demo_face_sw.csv", sep=",")
     print(df)
 
-    mem_rep.report()
+    # print(">>>>>> MemReporter 2.")
+    # mem_rep.report()
 
 
     f, axarr = plt.subplots(1, 2)
