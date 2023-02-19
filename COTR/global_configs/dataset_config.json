@@ -1,22 +1,22 @@
 {
   "megadepth": {
-    "valid_list_json": "/media/jiangwei/data_ssd/MegaDepth_v1_SfM/megadepth_valid_list.json",
-    "train_json": "/media/jiangwei/data_ssd/MegaDepth_v1_SfM/megadepth_train.json",
-    "val_json": "/media/jiangwei/data_ssd/MegaDepth_v1_SfM/megadepth_val.json",
-    "test_json": "/media/jiangwei/data_ssd/MegaDepth_v1_SfM/megadepth_test.json",
-    "scene_dir": "/media/jiangwei/data_ssd/MegaDepth_v1_SfM/{0}/sparse/manhattan/{1}_rectified/sparse",
-    "image_dir": "/media/jiangwei/data_ssd/MegaDepth_v1/phoenix/S6/zl548/MegaDepth_v1/{0}/dense{1}/imgs",
-    "depth_dir": "/media/jiangwei/data_ssd/MegaDepth_v1/phoenix/S6/zl548/MegaDepth_v1/{0}/dense{1}/depths"
+    "valid_list_json": "/mnt/nas5/dataset/MegaDepth_v1_SfM/megadepth_valid_list.json",
+    "train_json": "/mnt/nas5/dataset/MegaDepth_v1_SfM/megadepth_train.json",
+    "val_json": "/mnt/nas5/dataset/MegaDepth_v1_SfM/megadepth_val.json",
+    "test_json": "/mnt/nas5/dataset/MegaDepth_v1_SfM/megadepth_test.json",
+    "scene_dir": "/mnt/nas5/dataset/MegaDepth_v1_SfM/{0}/sparse/manhattan/{1}_rectified/sparse",
+    "image_dir": "/mnt/nas5/dataset/MegaDepth_v1/phoenix/S6/zl548/MegaDepth_v1/{0}/dense{1}/imgs",
+    "depth_dir": "/mnt/nas5/dataset/MegaDepth_v1/phoenix/S6/zl548/MegaDepth_v1/{0}/dense{1}/depths"
   },
 
   "megadepth_sushi": {
-    "valid_list_json": "/scratch/dataset/megadepth/MegaDepth_v1_SfM/megadepth_valid_list.json",
+    "valid_list_json": "/mnt/nas5/dataset/MegaDepth_v1_SfM/megadepth_valid_list.json",
     "train_json": "/scratch/programs/COTR/sample_data/megadepth_train.json",
     "val_json": "/scratch/programs/COTR/sample_data/megadepth_val.json",
-    "test_json": "/scratch/dataset/megadepth/MegaDepth_v1_SfM/megadepth_test.json",
-    "scene_dir": "/scratch/dataset/megadepth/MegaDepth_v1_SfM/{0}/sparse/manhattan/{1}_rectified/sparse",
-    "image_dir": "/scratch/dataset/megadepth/MegaDepth_v1/phoenix/S6/zl548/MegaDepth_v1/{0}/dense{1}/imgs",
-    "depth_dir": "/scratch/dataset/megadepth/MegaDepth_v1/phoenix/S6/zl548/MegaDepth_v1/{0}/dense{1}/depths"
+    "test_json": "/mnt/nas5/dataset/MegaDepth_v1_SfM/megadepth_test.json",
+    "scene_dir": "/mnt/nas5/dataset/MegaDepth_v1_SfM/{0}/sparse/manhattan/{1}_rectified/sparse",
+    "image_dir": "/mnt/nas5/dataset/MegaDepth_v1/phoenix/S6/zl548/MegaDepth_v1/{0}/dense{1}/imgs",
+    "depth_dir": "/mnt/nas5/dataset/MegaDepth_v1/phoenix/S6/zl548/MegaDepth_v1/{0}/dense{1}/depths"
   },
 
   "megadepth_sockeye": {
