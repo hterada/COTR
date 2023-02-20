@@ -1,3 +1,7 @@
 *.pyc
 .venv/**/*
 sample_data/dist_mat/
+tb_out/
+*-checkpoint.py
+*checkpoint.pth.tar
+*.log
