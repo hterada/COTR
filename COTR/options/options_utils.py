@@ -29,6 +29,12 @@ def get_compact_naming_cotr(opt) -> str:
         result = result + '_suffix:{0}'.format(opt.suffix)
     return result
 
+def get_compact_naming_cotr_distilled(opt) -> str:
+    result = f'model:cotr_distilled_{opt.backbone}_{opt.s_layer}_dset:{opt.dataset_name}_bs:{opt.batch_size}_lrbackbone:{opt.lr_backbone}'
+    if opt.suffix:
+        result = result + '_suffix:{0}'.format(opt.suffix)
+    return result
+
 
 def print_opt(opt):
     content_list = []

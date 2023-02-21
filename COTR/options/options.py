@@ -46,6 +46,7 @@ def set_COTR_arguments(parser):
     cotr_arg.add_argument('--dropout', type=float, default=0.1)
     cotr_arg.add_argument('--nheads', type=int, default=8)
     cotr_arg.add_argument('--layer', type=str, default='layer3', help='which layer from resnet')
+    cotr_arg.add_argument('--s_layer', type=str, default='layer2', help='which layer from resnet for distillation student')
     cotr_arg.add_argument('--enc_layers', type=int, default=6)
     cotr_arg.add_argument('--dec_layers', type=int, default=6)
     cotr_arg.add_argument('--position_embedding', type=str, default='lin_sine', help='sine wave type')

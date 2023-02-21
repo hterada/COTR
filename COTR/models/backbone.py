@@ -18,7 +18,7 @@ from COTR.utils import debug_utils, constants
 from COTR.utils.stopwatch import StopWatch
 from COTR.utils.utils import TR
 
-from pytorch_memlab import profile
+# from pytorch_memlab import profile
 
 
 class FrozenBatchNorm2d(torch.nn.Module):
@@ -140,14 +140,19 @@ class Joiner(nn.Sequential):
         return out, pos
 
 
-def build_backbone(args):
+def build_backbone(args, layer_override:str=None):
     position_embedding = build_position_encoding(args)
     if hasattr(args, 'lr_backbone'):
         train_backbone = args.lr_backbone > 0
     else:
         train_backbone = False
     TR(f"train_backbone:{train_backbone}")
-    backbone = Backbone(args.backbone, train_backbone, False, args.dilation, layer=args.layer, num_channels=args.dim_feedforward)
+    layer = None
+    if layer_override is not None:
+        layer = layer_override
+    else:
+        layer = args.layer
+    backbone = Backbone(args.backbone, train_backbone, False, args.dilation, layer=layer, num_channels=args.dim_feedforward)
     model = Joiner(backbone, position_embedding)
     model.num_channels = backbone.num_channels
     return model

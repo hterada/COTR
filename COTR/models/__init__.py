@@ -6,5 +6,5 @@ https://github.com/facebookresearch/detr
 from .cotr_model import build
 
 
-def build_model(args):
-    return build(args)
+def build_model(args, backbone_layer_override:str=None):
+    return build(args, backbone_layer_override=backbone_layer_override)

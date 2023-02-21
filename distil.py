@@ -20,18 +20,29 @@ from COTR.options.options_utils import *
 utils.fix_randomness(0)
 
 
-def train(opt):
+def distill(opt):
+    # print env info
     pprint.pprint(dict(os.environ), width=1)
     result = subprocess.Popen(["nvidia-smi"], stdout=subprocess.PIPE)
     print(result.stdout.read().decode())
     device = torch.cuda.current_device()
     print(f'can see {torch.cuda.device_count()} gpus')
     print(f'current using gpu at {device} -- {torch.cuda.get_device_name(device)}')
-    # dummy = torch.rand(3758725612).to(device)
-    # del dummy
+
     torch.cuda.empty_cache()
-    model = build_model(opt)
-    model = model.to(device)
+
+    # setup teacher model
+    t_model = build_model(opt)
+    t_model = t_model.cuda()
+    weights = torch.load(opt.load_weights_path, map_location='cpu')['model_state_dict']
+    utils.safe_load_weights(t_model, weights)
+    # eval(): switch to inference mode
+    t_model = t_model.eval()
+
+
+    # setup student model
+    s_model = build_model(opt)
+    s_model = s_model.to(device)
     if opt.enable_zoom:
         train_dset = cotr_dataset.COTRZoomDataset(opt, 'train')
         val_dset = cotr_dataset.COTRZoomDataset(opt, 'val')
@@ -46,16 +57,16 @@ def train(opt):
                             shuffle=opt.shuffle_data, num_workers=opt.workers,
                             drop_last=True, worker_init_fn=utils.worker_init_fn, pin_memory=True)
 
-    optim_list = [{"params": model.transformer.parameters(), "lr": opt.learning_rate},
-                  {"params": model.corr_embed.parameters(), "lr": opt.learning_rate},
-                  {"params": model.query_proj.parameters(), "lr": opt.learning_rate},
-                  {"params": model.input_proj.parameters(), "lr": opt.learning_rate},
+    optim_list = [{"params": s_model.transformer.parameters(), "lr": opt.learning_rate},
+                  {"params": s_model.corr_embed.parameters(), "lr": opt.learning_rate},
+                  {"params": s_model.query_proj.parameters(), "lr": opt.learning_rate},
+                  {"params": s_model.input_proj.parameters(), "lr": opt.learning_rate},
                   ]
     if opt.lr_backbone > 0:
-        optim_list.append({"params": model.backbone.parameters(), "lr": opt.lr_backbone})
-    
+        optim_list.append({"params": s_model.backbone.parameters(), "lr": opt.lr_backbone})
+
     optim = torch.optim.Adam(optim_list)
-    trainer = COTRTrainer(opt, model, optim, None, train_loader, val_loader)
+    trainer = COTRTrainer(opt, s_model, optim, None, train_loader, val_loader)
     trainer.train()
 
 
@@ -81,8 +92,8 @@ if __name__ == "__main__":
     parser.add_argument('--zoom_jitter', type=float,
                         default=0.5)
 
-    parser.add_argument('--out_dir', type=str, default=general_config['out'], help='out directory')
-    parser.add_argument('--tb_dir', type=str, default=general_config['tb_out'], help='tensorboard runs directory')
+    parser.add_argument('--out_dir', type=str, default=general_config['d_out'], help='out directory')
+    parser.add_argument('--tb_dir', type=str, default=general_config['d_tb_out'], help='tensorboard runs directory')
 
     parser.add_argument('--learning_rate', type=float,
                         default=1e-4, help='learning rate')
@@ -121,7 +132,7 @@ if __name__ == "__main__":
     opt.dim_feedforward = layer_2_channels[opt.layer]
     opt.num_queries = opt.num_kp
 
-    opt.name = get_compact_naming_cotr(opt)
+    opt.name = get_compact_naming_cotr_distilled(opt)
     opt.out = os.path.join(opt.out_dir, opt.name)
     opt.tb_out = os.path.join(opt.tb_dir, opt.name)
 
@@ -146,4 +157,4 @@ if __name__ == "__main__":
         print_opt(opt)
 
     save_opt(opt)
-    train(opt)
+    distill(opt)
