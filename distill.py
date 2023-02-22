@@ -1,48 +1,62 @@
+print("*** distill ***")
 import argparse
 import subprocess
 import pprint
+import copy
 
 import numpy as np
 import torch
-# import torch.multiprocessing
-# torch.multiprocessing.set_sharing_strategy('file_system')
 from torch.utils.data import DataLoader
 
-from COTR.models import build_model
+from COTR.models import build_model, COTR
 from COTR.utils import debug_utils, utils
+from COTR.utils.utils import TR
+
 from COTR.datasets import cotr_dataset
 from COTR.trainers.cotr_trainer import COTRTrainer
 from COTR.global_configs import general_config
 from COTR.options.options import *
 from COTR.options.options_utils import *
 
+from torchvision.models._utils import IntermediateLayerGetter
+
 
 utils.fix_randomness(0)
 
 
 def distill(opt):
+    TR()
     # print env info
     pprint.pprint(dict(os.environ), width=1)
     result = subprocess.Popen(["nvidia-smi"], stdout=subprocess.PIPE)
     print(result.stdout.read().decode())
     device = torch.cuda.current_device()
     print(f'can see {torch.cuda.device_count()} gpus')
-    print(f'current using gpu at {device} -- {torch.cuda.get_device_name(device)}')
+    print(
+        f'current using gpu at {device} -- {torch.cuda.get_device_name(device)}')
 
     torch.cuda.empty_cache()
 
     # setup teacher model
-    t_model = build_model(opt)
+    TR()
+    t_model:COTR = build_model(opt)
     t_model = t_model.cuda()
-    weights = torch.load(opt.load_weights_path, map_location='cpu')['model_state_dict']
+    weights = torch.load(opt.load_weights_path, map_location='cpu')[
+        'model_state_dict']
     utils.safe_load_weights(t_model, weights)
     # eval(): switch to inference mode
     t_model = t_model.eval()
 
-
     # setup student model
-    s_model = build_model(opt)
-    s_model = s_model.to(device)
+    s_model:COTR = copy.deepcopy(t_model)
+    # modify body layer
+    print(f"backbone type:{type(s_model.backbone)}")
+    print(s_model.backbone[0])
+    s_model.backbone.body = IntermediateLayerGetter(s_model.backbone[0].body, {"layer2": "0"})
+    s_model.cuda()
+    s_model.train(True)
+
+    #
     if opt.enable_zoom:
         train_dset = cotr_dataset.COTRZoomDataset(opt, 'train')
         val_dset = cotr_dataset.COTRZoomDataset(opt, 'val')
@@ -57,13 +71,15 @@ def distill(opt):
                             shuffle=opt.shuffle_data, num_workers=opt.workers,
                             drop_last=True, worker_init_fn=utils.worker_init_fn, pin_memory=True)
 
-    optim_list = [{"params": s_model.transformer.parameters(), "lr": opt.learning_rate},
-                  {"params": s_model.corr_embed.parameters(), "lr": opt.learning_rate},
-                  {"params": s_model.query_proj.parameters(), "lr": opt.learning_rate},
-                  {"params": s_model.input_proj.parameters(), "lr": opt.learning_rate},
-                  ]
+    optim_list = [
+        {"params": s_model.transformer.parameters(), "lr": opt.learning_rate},
+        {"params": s_model.corr_embed.parameters(), "lr": opt.learning_rate},
+        {"params": s_model.query_proj.parameters(), "lr": opt.learning_rate},
+        {"params": s_model.input_proj.parameters(), "lr": opt.learning_rate},
+    ]
     if opt.lr_backbone > 0:
-        optim_list.append({"params": s_model.backbone.parameters(), "lr": opt.lr_backbone})
+        optim_list.append(
+            {"params": s_model.backbone.parameters(), "lr": opt.lr_backbone})
 
     optim = torch.optim.Adam(optim_list)
     trainer = COTRTrainer(opt, s_model, optim, None, train_loader, val_loader)
@@ -71,6 +87,7 @@ def distill(opt):
 
 
 if __name__ == "__main__":
+    TR()
     parser = argparse.ArgumentParser()
 
     set_general_arguments(parser)
@@ -92,8 +109,10 @@ if __name__ == "__main__":
     parser.add_argument('--zoom_jitter', type=float,
                         default=0.5)
 
-    parser.add_argument('--out_dir', type=str, default=general_config['d_out'], help='out directory')
-    parser.add_argument('--tb_dir', type=str, default=general_config['d_tb_out'], help='tensorboard runs directory')
+    parser.add_argument('--out_dir', type=str,
+                        default=general_config['d_out'], help='out directory')
+    parser.add_argument(
+        '--tb_dir', type=str, default=general_config['d_tb_out'], help='tensorboard runs directory')
 
     parser.add_argument('--learning_rate', type=float,
                         default=1e-4, help='learning rate')
@@ -119,7 +138,8 @@ if __name__ == "__main__":
                         help='max rotation for data augmentation')
     parser.add_argument('--rotation_chance', type=float, default=0,
                         help='the probability of being rotated')
-    parser.add_argument('--load_weights', type=str, default=None, help='load a pretrained set of weights, you need to provide the model id')
+    parser.add_argument('--load_weights', type=str, default=None,
+                        help='load a pretrained set of weights, you need to provide the model id')
     parser.add_argument('--suffix', type=str, default='', help='model suffix')
 
     opt = parser.parse_args()
@@ -145,11 +165,14 @@ if __name__ == "__main__":
             opt.resume = False
     assert (bool(opt.load_weights) and opt.resume) == False
     if opt.load_weights:
-        opt.load_weights_path = os.path.join(opt.out_dir, opt.load_weights, 'checkpoint.pth.tar')
+        opt.load_weights_path = os.path.join(
+            opt.out_dir, opt.load_weights, 'checkpoint.pth.tar')
     if opt.resume:
         opt.load_weights_path = os.path.join(opt.out, 'checkpoint.pth.tar')
 
+    TR()
     opt.scenes_name_list = build_scenes_name_list_from_opt(opt)
+    TR()
 
     if opt.confirm:
         confirm_opt(opt)
@@ -157,4 +180,5 @@ if __name__ == "__main__":
         print_opt(opt)
 
     save_opt(opt)
+    TR()
     distill(opt)

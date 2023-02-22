@@ -16,7 +16,7 @@ from .position_encoding import NerfPositionalEncoding, MLP
 
 from COTR.utils.stopwatch import StopWatch
 from COTR.utils.utils import TR
-from pytorch_memlab import profile
+# from pytorch_memlab import profile
 
 
 class COTR(nn.Module):
@@ -30,7 +30,7 @@ class COTR(nn.Module):
         self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
         self.backbone = backbone
 
-    @profile
+    # @profile
     def forward(self, samples: Union[torch.Tensor, NestedTensor], queries):
         if type(samples)==torch.Tensor:
             TR(f"COTR INPUT: samples:{samples.shape} queries:{queries.shape}")
@@ -64,8 +64,8 @@ class COTR(nn.Module):
         return out
 
 
-def build(args):
-    backbone = build_backbone(args)
+def build(args, backbone_layer_override:str=None):
+    backbone = build_backbone(args, backbone_layer_override)
     transformer = build_transformer(args)
     model = COTR(
         backbone,
