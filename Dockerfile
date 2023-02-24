@@ -31,6 +31,7 @@ RUN conda run -n cotr_env pip install pytorch_memlab
 RUN conda install -n cotr_env jupyterlab ipywidgets -y
 RUN conda install -n cotr_env -c conda-forge torchinfo tensorboardx -y
 RUN conda run -n cotr_env pip install jupyterlab_tabnine
+RUN conda install -c conda-forge line_profiler -y
 
 
 VOLUME ["/COTR"]
