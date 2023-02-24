@@ -33,12 +33,8 @@ def main(opt):
     model = model.cuda()
     weights = torch.load(opt.load_weights_path, map_location='cpu')['model_state_dict']
     utils.safe_load_weights(model, weights)
-
     # eval(): switch to inference mode
     model = model.eval()
-    # mem_rep = MemReporter(model)
-    # # print(">>>>>> MemReporter 1.")
-    # mem_rep.report()
 
     img_a = imageio.imread('./sample_data/imgs/face_1.png', pilmode='RGB')
     img_b = imageio.imread('./sample_data/imgs/face_2.png', pilmode='RGB')

@@ -140,7 +140,7 @@ class Joiner(nn.Sequential):
         return out, pos
 
 
-def build_backbone(args, layer_override:str=None):
+def build_backbone(args):
     position_embedding = build_position_encoding(args)
     if hasattr(args, 'lr_backbone'):
         train_backbone = args.lr_backbone > 0
@@ -148,10 +148,7 @@ def build_backbone(args, layer_override:str=None):
         train_backbone = False
     TR(f"train_backbone:{train_backbone}")
     layer = None
-    if layer_override is not None:
-        layer = layer_override
-    else:
-        layer = args.layer
+    layer = args.layer
     backbone = Backbone(args.backbone, train_backbone, False, args.dilation, layer=layer, num_channels=args.dim_feedforward)
     model = Joiner(backbone, position_embedding)
     model.num_channels = backbone.num_channels

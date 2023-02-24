@@ -64,8 +64,8 @@ class COTR(nn.Module):
         return out
 
 
-def build(args, backbone_layer_override:str=None):
-    backbone = build_backbone(args, backbone_layer_override)
+def build(args):
+    backbone = build_backbone(args)
     transformer = build_transformer(args)
     model = COTR(
         backbone,
