@@ -18,6 +18,7 @@ from COTR.transformations.transform_basics import Translation, Rotation
 from COTR.sfm_scenes import sfm_scenes
 from COTR.global_configs import dataset_config
 from COTR.utils.utils import Point2D, Point3D
+from COTR.utils.line_profiler_header import *
 
 ImageMeta = namedtuple('ImageMeta', ['image_id', 'r', 't', 'camera_id', 'image_path', 'point3d_id', 'p2d'])
 COVISIBILITY_CHECK = False
@@ -181,6 +182,7 @@ class ColmapWithDepthAsciiReader(ColmapAsciiReader):
         sfm_scene = sfm_scenes.SfmScene(captures, point_cloud)
         return sfm_scene
 
+    @profile
     @classmethod
     def read_sfm_scene_given_valid_list_path(cls, scene_dir, images_dir, depth_dir, valid_list_json_path, crop_cam):
         point_cloud_path = os.path.join(scene_dir, 'points3D.txt')
@@ -221,6 +223,7 @@ class ColmapWithDepthAsciiReader(ColmapAsciiReader):
             captures.append(cap)
         return captures
 
+    @profile
     @classmethod
     def read_captures_with_depth_given_valid_list(cls, images_txt_path, cameras_txt_path, images_dir, depth_dir, valid_list, crop_cam):
         captures = []

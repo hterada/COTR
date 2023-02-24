@@ -13,6 +13,7 @@ from COTR.datasets import colmap_helper
 from COTR.global_configs import dataset_config
 from COTR.sfm_scenes import knn_search
 from COTR.utils import debug_utils, utils, constants
+from COTR.utils.line_profiler_header import *
 
 SceneCapIndex = namedtuple('SceneCapIndex', ['scene_index', 'capture_index'])
 
@@ -29,6 +30,7 @@ class MegadepthSceneDataBase():
     scenes = {}
     knn_engine_dict = {}
 
+    @profile
     @classmethod
     def _load_scene(cls, opt, scene_dir_dict):
         if scene_dir_dict['scene_dir'] not in cls.scenes:
@@ -113,6 +115,7 @@ class MegadepthDataset():
         knn_engine_list = []
         total_caps_set = set()
         for scene_id, scene_dir_dict in enumerate(self.scenes_name_list):
+            print(f"scene_id:{scene_id}/{len(self.scenes_name_list)-1}")
             MegadepthSceneDataBase._load_scene(self.opt, scene_dir_dict)
             scene = MegadepthSceneDataBase.scenes[scene_dir_dict['scene_dir']]
             knn_engine = MegadepthSceneDataBase.knn_engine_dict[scene_dir_dict['scene_dir']]

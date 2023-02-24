@@ -14,11 +14,13 @@ from COTR.utils import debug_utils, utils, constants
 from COTR.projector import pcd_projector
 from COTR.cameras import capture
 from COTR.utils.utils import CropCamConfig
+from COTR.utils.line_profiler_header import *
 from COTR.inference import inference_helper
 from COTR.inference.inference_helper import two_images_side_by_side
 
 
 class COTRDataset(data.Dataset):
+    @profile
     def __init__(self, opt, dataset_type: str):
         assert dataset_type in ['train', 'val', 'test']
         assert len(opt.scenes_name_list) > 0
