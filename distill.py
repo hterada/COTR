@@ -11,9 +11,10 @@ from torch.utils.data import DataLoader
 from COTR.models import build_model, COTR
 from COTR.utils import debug_utils, utils
 from COTR.utils.utils import TR
+from COTR.utils.line_profiler_header import *
 
 from COTR.datasets import cotr_dataset
-from COTR.trainers.cotr_trainer import COTRTrainer
+from COTR.trainers.cotr_distiller import COTRBackboneDistiller
 from COTR.global_configs import general_config
 from COTR.options.options import *
 from COTR.options.options_utils import *
@@ -24,16 +25,15 @@ from torchvision.models._utils import IntermediateLayerGetter
 utils.fix_randomness(0)
 
 
-def distill(opt):
-    TR()
+@profile
+def distill_backbone(opt, load_t_weights_path:str, load_s_weights_path:str, s_layer:str):
     # print env info
     pprint.pprint(dict(os.environ), width=1)
     result = subprocess.Popen(["nvidia-smi"], stdout=subprocess.PIPE)
     print(result.stdout.read().decode())
     device = torch.cuda.current_device()
     print(f'can see {torch.cuda.device_count()} gpus')
-    print(
-        f'current using gpu at {device} -- {torch.cuda.get_device_name(device)}')
+    print(f'current using gpu at {device} -- {torch.cuda.get_device_name(device)}')
 
     torch.cuda.empty_cache()
 
@@ -41,20 +41,25 @@ def distill(opt):
     TR()
     t_model:COTR = build_model(opt)
     t_model = t_model.cuda()
-    weights = torch.load(opt.load_weights_path, map_location='cpu')[
-        'model_state_dict']
+    weights = torch.load(load_t_weights_path, map_location='cpu')['model_state_dict']
     utils.safe_load_weights(t_model, weights)
     # eval(): switch to inference mode
     t_model = t_model.eval()
+    print(t_model.backbone[0])
 
     # setup student model
-    s_model:COTR = copy.deepcopy(t_model)
-    # modify body layer
-    print(f"backbone type:{type(s_model.backbone)}")
+    s_model:COTR = build_model(opt)
+    s_model = s_model.cuda()
+    weights = torch.load(load_s_weights_path, map_location='cpu')['model_state_dict']
+    utils.safe_load_weights(s_model, weights)
+
+    ## modify body layer
+    s_model.backbone[0].body = IntermediateLayerGetter(s_model.backbone[0].body, {s_layer: "0"})
     print(s_model.backbone[0])
-    s_model.backbone.body = IntermediateLayerGetter(s_model.backbone[0].body, {"layer2": "0"})
     s_model.cuda()
     s_model.train(True)
+
+    return
 
     #
     if opt.enable_zoom:
@@ -82,7 +87,7 @@ def distill(opt):
             {"params": s_model.backbone.parameters(), "lr": opt.lr_backbone})
 
     optim = torch.optim.Adam(optim_list)
-    trainer = COTRTrainer(opt, s_model, optim, None, train_loader, val_loader)
+    trainer = COTRBackboneDistiller(t_model, s_model, optim, None, train_loader, val_loader)
     trainer.train()
 
 
@@ -138,8 +143,12 @@ if __name__ == "__main__":
                         help='max rotation for data augmentation')
     parser.add_argument('--rotation_chance', type=float, default=0,
                         help='the probability of being rotated')
-    parser.add_argument('--load_weights', type=str, default=None,
-                        help='load a pretrained set of weights, you need to provide the model id')
+
+    parser.add_argument('--load_t_weights', type=str, default=None, required=True,
+                        help='load a pretrained set of weights for teacher, you need to provide the model id')
+    parser.add_argument('--load_s_weights', type=str, default=None,
+                        help='load a pretrained set of weights for student, you need to provide the model id')
+
     parser.add_argument('--suffix', type=str, default='', help='model suffix')
 
     opt = parser.parse_args()
@@ -157,18 +166,29 @@ if __name__ == "__main__":
     opt.tb_out = os.path.join(opt.tb_dir, opt.name)
 
     if opt.cc_resume:
+        # さっきの続きから。
         if os.path.isfile(os.path.join(opt.out, 'checkpoint.pth.tar')):
             print('resuming from last run')
-            opt.load_weights = None
+            opt.load_s_weights = None
             opt.resume = True
         else:
             opt.resume = False
-    assert (bool(opt.load_weights) and opt.resume) == False
-    if opt.load_weights:
-        opt.load_weights_path = os.path.join(
-            opt.out_dir, opt.load_weights, 'checkpoint.pth.tar')
+    assert (bool(opt.load_s_weights) and opt.resume) == False
+    # teacher
+    load_t_weights_path = None
+    if opt.load_t_weights:
+        load_t_weights_path = os.path.join(opt.load_t_weights, 'checkpoint.pth.tar')
+
+    # student
+    load_s_weights_path = None
+    if opt.load_s_weights:
+        load_s_weights_path = os.path.join(opt.load_s_weights, 'checkpoint.pth.tar')
+
+    # resume
     if opt.resume:
-        opt.load_weights_path = os.path.join(opt.out, 'checkpoint.pth.tar')
+        load_s_weights_path = os.path.join(opt.out, 'checkpoint.pth.tar')
+
+    # for
 
     TR()
     opt.scenes_name_list = build_scenes_name_list_from_opt(opt)
@@ -181,4 +201,4 @@ if __name__ == "__main__":
 
     save_opt(opt)
     TR()
-    distill(opt)
+    distill_backbone(opt, load_t_weights_path, load_s_weights_path, opt.s_layer)

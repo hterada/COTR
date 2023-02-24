@@ -8,3 +8,6 @@ tb_out/
 debug_tb_out/
 debug_out/
 .ipynb_checkpoints/
+d_tb_out/
+my_out/
+out/

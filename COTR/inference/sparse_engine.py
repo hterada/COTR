@@ -16,7 +16,7 @@ from COTR.utils.utils import TR
 from COTR.utils.stopwatch import StopWatch
 from COTR.cameras.capture import stretch_to_square_np
 
-from pytorch_memlab import profile
+# from pytorch_memlab import profile
 
 
 class SparseEngine():

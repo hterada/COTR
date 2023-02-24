@@ -182,8 +182,8 @@ class ColmapWithDepthAsciiReader(ColmapAsciiReader):
         sfm_scene = sfm_scenes.SfmScene(captures, point_cloud)
         return sfm_scene
 
-    @profile
     @classmethod
+    @profile
     def read_sfm_scene_given_valid_list_path(cls, scene_dir, images_dir, depth_dir, valid_list_json_path, crop_cam):
         point_cloud_path = os.path.join(scene_dir, 'points3D.txt')
         cameras_path = os.path.join(scene_dir, 'cameras.txt')
@@ -223,8 +223,8 @@ class ColmapWithDepthAsciiReader(ColmapAsciiReader):
             captures.append(cap)
         return captures
 
-    @profile
     @classmethod
+    @profile
     def read_captures_with_depth_given_valid_list(cls, images_txt_path, cameras_txt_path, images_dir, depth_dir, valid_list, crop_cam):
         captures = []
         cameras = cls.read_cameras(cameras_txt_path)

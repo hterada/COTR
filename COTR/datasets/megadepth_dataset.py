@@ -30,8 +30,8 @@ class MegadepthSceneDataBase():
     scenes = {}
     knn_engine_dict = {}
 
-    @profile
     @classmethod
+    @profile
     def _load_scene(cls, opt, scene_dir_dict):
         if scene_dir_dict['scene_dir'] not in cls.scenes:
             if opt.info_level == 'rgb':
