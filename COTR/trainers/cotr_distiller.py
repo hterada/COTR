@@ -15,7 +15,7 @@ from COTR.trainers import base_trainer, tensorboard_helper
 from COTR.projector import pcd_projector
 
 
-class COTRDistiller():
+class COTRBackboneDistiller():
     def __init__(self, t_model, s_model,
                  optimizer, criterion,
                  train_loader, val_loader):
