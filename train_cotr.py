@@ -53,7 +53,7 @@ def train(opt):
                   ]
     if opt.lr_backbone > 0:
         optim_list.append({"params": model.backbone.parameters(), "lr": opt.lr_backbone})
-    
+
     optim = torch.optim.Adam(optim_list)
     trainer = COTRTrainer(opt, model, optim, None, train_loader, val_loader)
     trainer.train()
@@ -126,6 +126,7 @@ if __name__ == "__main__":
     opt.tb_out = os.path.join(opt.tb_dir, opt.name)
 
     if opt.cc_resume:
+        # さっきの続きから。これが有効なときは、load_weights は無視される。
         if os.path.isfile(os.path.join(opt.out, 'checkpoint.pth.tar')):
             print('resuming from last run')
             opt.load_weights = None
