@@ -86,7 +86,7 @@ class BackboneBase(nn.Module):
     #@profile
     def forward(self, tensor_list: NestedTensor):
         assert tensor_list.tensors.shape[-2:] == (constants.MAX_SIZE, constants.MAX_SIZE * 2)
-        TR(f"BackboneBase: INPUT tensor_list:{tensor_list.tensors.shape}")
+        TR(f"BackboneBase: INPUT tensor_list:{type(tensor_list), tensor_list.tensors.shape}")
         left = self.body(tensor_list.tensors[..., 0:constants.MAX_SIZE])
         right = self.body(tensor_list.tensors[..., constants.MAX_SIZE:2 * constants.MAX_SIZE])
         TR(f"left : {[(k, v.shape) for k,v in left.items()]}")
