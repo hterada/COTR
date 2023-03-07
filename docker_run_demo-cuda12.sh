@@ -2,6 +2,7 @@
 
 docker run --rm --gpus all \
   -v /home/terada/work/COTR:/COTR \
+  -v /home/terada/MegaDepth_v1_SfM:/dataset/MegaDepth_v1_SfM \
   -v /mnt:/mnt \
   -v $HOME/.Xauthority:/root/.Xauthority \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
