@@ -30,7 +30,7 @@ def get_compact_naming_cotr(opt) -> str:
     return result
 
 def get_compact_naming_cotr_distilled(opt) -> str:
-    result = f'model:cotr_distilled_{opt.backbone}_{opt.s_layer}_dset:{opt.dataset_name}_bs:{opt.batch_size}_lrbackbone:{opt.lr_backbone}'
+    result = f'model:cotr_distilled_{opt.backbone}_{opt.s_layer}_dset:{opt.dataset_name}_bs:{opt.batch_size}_lr:{opt.learning_rate}'
     if opt.suffix:
         result = result + '_suffix:{0}'.format(opt.suffix)
     return result
