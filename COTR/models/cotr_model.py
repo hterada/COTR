@@ -32,6 +32,7 @@ class COTR(nn.Module):
 
     # @profile
     def forward(self, samples: Union[torch.Tensor, NestedTensor], queries):
+        TR(f"samples:{type(samples)}")
         if type(samples)==torch.Tensor:
             TR(f"COTR INPUT: samples:{samples.shape} queries:{queries.shape}")
         if isinstance(samples, (list, torch.Tensor)):
