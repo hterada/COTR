@@ -13,6 +13,7 @@ from COTR.transformations import transformations
 from COTR.transformations.transform_basics import Translation, Rotation
 from COTR.cameras.camera_pose import CameraPose
 from COTR.utils import debug_utils
+from COTR.utils.line_profiler_header import *
 
 
 class SfmScene():
@@ -71,10 +72,12 @@ class SfmScene():
                 pass
         return covis_caps
 
+    @profile
     def read_data_to_ram(self, data_list):
         print('warning: you are going to use a lot of RAM.')
         sum_bytes = 0.0
         pbar = tqdm(self.captures, desc='reading data, memory usage {0:.2f} MB'.format(sum_bytes / (1024.0 * 1024.0)))
+        # ix = 0 #debug
         for cap in pbar:
             if 'image' in data_list:
                 sum_bytes += cap.read_image_to_ram()
@@ -83,5 +86,8 @@ class SfmScene():
             if 'pcd' in data_list:
                 sum_bytes += cap.read_pcd_to_ram()
             pbar.set_description('reading data, memory usage {0:.2f} MB'.format(sum_bytes / (1024.0 * 1024.0)))
+            # ix += 1
+            # if ix > 24: #debug
+            #     break
         print('----- total memory usage for images: {0} MB-----'.format(sum_bytes / (1024.0 * 1024.0)))
 

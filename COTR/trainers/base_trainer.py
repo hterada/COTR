@@ -9,6 +9,8 @@ import tensorboardX
 
 from COTR.trainers import tensorboard_helper
 from COTR.utils import utils
+from COTR.utils.utils import TR
+from COTR.utils.line_profiler_header import *
 from COTR.options import options_utils
 
 
@@ -63,11 +65,14 @@ class BaseTrainer(abc.ABC):
         '''
         pass
 
+    @profile
     def train_epoch(self):
         '''train for one epoch
         one epoch is iterating the whole training dataset once
         '''
+        TR("train_epoch")
         self.model.train()
+        print(f"trail_loader len:{len(self.train_loader)}")
         for batch_idx, data_pack in tqdm.tqdm(enumerate(self.train_loader),
                                               initial=self.iteration % len(
                                                   self.train_loader),
@@ -85,7 +90,9 @@ class BaseTrainer(abc.ABC):
             # self.iteration += 1
             if self.iteration % self.valid_iter == 0:
                 time.sleep(2)  # Prevent possible deadlock during epoch transition
+                TR()
                 self.validate()
+            TR()
             self.train_batch(data_pack)
 
             if self.iteration >= self.max_iter:

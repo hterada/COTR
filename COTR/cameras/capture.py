@@ -23,6 +23,7 @@ from COTR.utils.utils import Point2D
 from COTR.projector import pcd_projector
 from COTR.utils.constants import MAX_SIZE
 from COTR.utils.utils import CropCamConfig
+from COTR.utils.line_profiler_header import *
 
 
 def crop_center_max_xy(p2d, shape):
@@ -254,27 +255,32 @@ class CapturedDepth(CapturedContent):
         self.depth_path = depth_path
         self.pinhole_cam_before = pinhole_cam_before
 
+    @profile
     def read_depth(self):
         if self.depth_path.endswith('dummy'):
             image_path = self.depth_path[:-5]
             w, h = Image.open(image_path).size
             _depth = np.zeros([h, w], dtype=np.float32)
         elif self.depth_path.endswith('.h5'):
+            # print(f"depth_path:{self.depth_path}")
             depth_h5 = tables.open_file(self.depth_path, mode='r')
+            # depth_h5.root.depth:tables.carray.CArray
             _depth = np.array(depth_h5.root.depth)
             depth_h5.close()
         else:
             raise ValueError
         return _depth.astype(np.float32)
 
+    @profile
     def read_depth_to_ram(self) -> int:
         # raise NotImplementedError
         assert self._depth is None
-        _depth = self.depth_map
-        self._depth = _depth
+        self._depth = self.depth_map
+        # self._depth = _depth
         return self._depth.nbytes
 
     @property
+    @profile
     def depth_map(self):
         if self._depth is not None:
             _depth = self._depth
