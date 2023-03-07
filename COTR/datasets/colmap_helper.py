@@ -4,11 +4,13 @@ import os
 import re
 from collections import namedtuple
 import json
+import mmap
 
 import numpy as np
 from tqdm import tqdm
 
 from COTR.utils import debug_utils
+from COTR.utils.utils import TR
 from COTR.cameras.pinhole_camera import PinholeCamera
 from COTR.cameras.camera_pose import CameraPose
 from COTR.cameras.capture import RGBPinholeCapture, RGBDPinholeCapture
@@ -247,31 +249,34 @@ class ColmapWithDepthAsciiReader(ColmapAsciiReader):
         return captures
 
     @classmethod
+    @profile
     def read_images_meta_given_valid_list(cls, images_txt_path, images_dir, valid_list):
         images_meta = {}
         with open(images_txt_path, "r") as fid:
-            line = fid.readline()
+            m_map = mmap.mmap( fid.fileno(), 0, prot=mmap.PROT_READ)
+
+            line = m_map.readline().decode()
             assert line == '# Image list with two lines of data per image:\n'
-            line = fid.readline()
+            line = m_map.readline().decode()
             assert line == '#   IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, NAME\n'
-            line = fid.readline()
+            line = m_map.readline().decode()
             assert line == '#   POINTS2D[] as (X, Y, POINT3D_ID)\n'
-            line = fid.readline()
+            line = m_map.readline().decode()
             assert re.search('^# Number of images: \d+, mean observations per image:[-+]?\d*\.\d+|\d+\n$', line), line
             num_images, mean_ob_per_img = re.findall(r"[-+]?\d*\.\d+|\d+", line)
             num_images = int(num_images)
             mean_ob_per_img = float(mean_ob_per_img)
 
             for _ in tqdm(range(num_images), desc='reading images meta'):
-                elems = fid.readline().split()
+                elems = m_map.readline().decode().split()
                 assert len(elems) == 10
-                line = fid.readline()
+                line = m_map.readline().decode()
                 image_path = os.path.join(images_dir, elems[9])
                 prefix = os.path.abspath(os.path.join(image_path, '../../../../')) + '/'
                 rel_image_path = image_path.replace(prefix, '')
                 if rel_image_path not in valid_list:
                     continue
-                assert os.path.isfile(image_path), '{0} is not existing'.format(image_path)
+                # assert os.path.isfile(image_path), '{0} is not existing'.format(image_path)
                 image_id = int(elems[0])
                 qw, qx, qy, qz, tx, ty, tz = list(map(float, elems[1:8]))
                 t = Translation(np.array([tx, ty, tz], dtype=np.float32))
@@ -293,6 +298,8 @@ class ColmapWithDepthAsciiReader(ColmapAsciiReader):
                     point3d_id = None
                     p2d = None
                 images_meta[image_id] = ImageMeta(image_id, r, t, camera_id, image_path, point3d_id, p2d)
+
+            m_map.close()
         return images_meta
 
     @classmethod
