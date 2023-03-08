@@ -178,7 +178,7 @@ class COTRBackboneDistiller(base_trainer.BaseTrainer):
             self.optim.zero_grad()
         else:
             loss.backward()
-            self.push_training_data(data_pack, s_pred, t_pred, loss)
+            self.push_training_data(data_pack, s_pred['0'].tensors, t_pred['0'].tensors, loss)
         self.optim.step()
 
     def push_training_data(self, data_pack, s_pred, t_pred, loss):
