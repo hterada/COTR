@@ -45,7 +45,7 @@ def distill_backbone(opt, load_t_weights_path:str, load_s_weights_path:str, s_la
     utils.safe_load_weights(t_model, weights)
     # eval(): switch to inference mode
     t_model = t_model.eval()
-    print(f"t_model.backbone:{t_model.backbone[0]}")
+    print(f"t_model.backbone:{type(t_model.backbone), t_model.backbone[0]}")
 
     # setup student model
     s_model:COTR = build_model(opt)
@@ -54,7 +54,11 @@ def distill_backbone(opt, load_t_weights_path:str, load_s_weights_path:str, s_la
     utils.safe_load_weights(s_model, weights)
 
     ## modify body layer
-    s_model.backbone[0].body = IntermediateLayerGetter(s_model.backbone[0].body, {s_layer: "0"})
+    body = IntermediateLayerGetter(s_model.backbone[0].body, {s_layer: "0"})
+    seq_conv = torch.nn.Sequential(torch.nn.Conv2d(512, 1024, (2,2), stride=2))
+    body['resize'] = seq_conv
+    body.return_layers = {"resize":"0"}
+    s_model.backbone[0].body = body
     print(f"s_model.backbone:{s_model.backbone[0]}")
     s_model.cuda()
     s_model.train(True)
