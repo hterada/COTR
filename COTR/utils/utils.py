@@ -275,7 +275,7 @@ def code_location(frame=None):
     if frame is None:
         frm = inspect.currentframe().f_back
     # frame = frm.f_back # 1-level upper of frame
-    ret = f"{frame.f_code.co_filename}({frame.f_lineno})"
+    ret = f"{frame.f_code.co_filename}:{frame.f_lineno}:"
     del frame
     return ret
 
@@ -287,4 +287,4 @@ def TR(msg=''):
     """
     cl = code_location(inspect.currentframe().f_back)
 
-    print(f"TR@ {cl}:{msg}")
+    print(f"{cl}:{msg}")
