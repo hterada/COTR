@@ -11,17 +11,28 @@ from PIL import Image, ImageDraw
 
 
 from COTR.utils import utils, debug_utils, constants
+from COTR.utils.utils import TR
+from COTR.utils.line_profiler_header import *
 from COTR.trainers import base_trainer, tensorboard_helper
 from COTR.projector import pcd_projector
+from COTR.models.misc import NestedTensor
 
 
-class COTRBackboneDistiller():
-    def __init__(self, t_model, s_model,
+class COTRBackboneDistiller(base_trainer.BaseTrainer):
+    def __init__(self, opt, t_model, s_model,
                  optimizer, criterion,
                  train_loader, val_loader):
-        pass
+        # このクラスでは、極力 opt を使いたくない。
+        # super クラスの都合のための opt 設定
+        opt.load_weights = None
+        super().__init__(opt, s_model, optimizer, criterion,
+                         train_loader, val_loader)
+        self.t_model = t_model
+        self.s_model = s_model # same as self.model
 
+    @profile
     def validate_batch(self, data_pack):
+        return
         assert self.model.training is False
         with torch.no_grad():
             img = data_pack['image'].cuda()
@@ -54,6 +65,7 @@ class COTRBackboneDistiller():
     def validate(self):
         '''validate for whole validation dataset
         '''
+        return
         training = self.model.training
         self.model.eval()
         val_loss_list = []
@@ -121,44 +133,60 @@ class COTRBackboneDistiller():
     def train_batch(self, data_pack):
         '''train for one batch of data
         '''
+        TR()
         img = data_pack['image'].cuda()
-        query = data_pack['queries'].cuda()
-        target = data_pack['targets'].cuda()
+        b,c,h,w = img.shape
+        # img.shape = (24, 3, 256, 512)
+        print(f"img:{type(img), img.shape}")
+        # query = data_pack['queries'].cuda()
+        # target = data_pack['targets'].cuda()
 
         self.optim.zero_grad()
-        pred = self.model(img, query)['pred_corrs']
-        loss = torch.nn.functional.mse_loss(pred, target)
-        if self.opt.cycle_consis and self.opt.bidirectional:
-            cycle = self.model(img, pred)['pred_corrs']
-            mask = torch.norm(cycle - query, dim=-1) < 10 / constants.MAX_SIZE
-            if mask.sum() > 0:
-                cycle_loss = torch.nn.functional.mse_loss(cycle[mask], query[mask])
-                loss += cycle_loss
-        elif self.opt.cycle_consis and not self.opt.bidirectional:
-                img_reverse = torch.cat([img[..., constants.MAX_SIZE:], img[..., :constants.MAX_SIZE]], axis=-1)
-                query_reverse = pred.clone()
-                query_reverse[..., 0] = query_reverse[..., 0] - 0.5
-                cycle = self.model(img_reverse, query_reverse)['pred_corrs']
-                cycle[..., 0] = cycle[..., 0] - 0.5
-                mask = torch.norm(cycle - query, dim=-1) < 10 / constants.MAX_SIZE
-                if mask.sum() > 0:
-                    cycle_loss = torch.nn.functional.mse_loss(cycle[mask], query[mask])
-                    loss += cycle_loss
+        TR(f"model:{type(self.model)}")
+        mask = torch.ones((b,h,w), dtype=torch.bool, device=img.device)
+        nested_tensor = NestedTensor(img, mask)
+        # student
+        s_pred = self.s_model(nested_tensor)
+        assert list(s_pred.keys())==['0']
+        print(f"s_pred:{type(s_pred), s_pred['0'].tensors.shape}")
+        # teacher
+        t_pred = self.t_model(nested_tensor)
+        assert list(t_pred.keys())==['0']
+        print(f"t_pred:{type(t_pred), t_pred['0'].tensors.shape}")
+
+        loss = torch.nn.functional.mse_loss(s_pred['0'].tensors, t_pred['0'].tensors)
+
+        # if self.opt.cycle_consis and self.opt.bidirectional:
+        #     cycle = self.model(img, pred)['pred_corrs']
+        #     mask = torch.norm(cycle - query, dim=-1) < 10 / constants.MAX_SIZE
+        #     if mask.sum() > 0:
+        #         cycle_loss = torch.nn.functional.mse_loss(cycle[mask], query[mask])
+        #         loss += cycle_loss
+        # elif self.opt.cycle_consis and not self.opt.bidirectional:
+        #         img_reverse = torch.cat([img[..., constants.MAX_SIZE:], img[..., :constants.MAX_SIZE]], axis=-1)
+        #         query_reverse = pred.clone()
+        #         query_reverse[..., 0] = query_reverse[..., 0] - 0.5
+        #         cycle = self.model(img_reverse, query_reverse)['pred_corrs']
+        #         cycle[..., 0] = cycle[..., 0] - 0.5
+        #         mask = torch.norm(cycle - query, dim=-1) < 10 / constants.MAX_SIZE
+        #         if mask.sum() > 0:
+        #             cycle_loss = torch.nn.functional.mse_loss(cycle[mask], query[mask])
+        #             loss += cycle_loss
         loss_data = loss.data.item()
         if np.isnan(loss_data):
             print('loss is nan during training')
             self.optim.zero_grad()
         else:
             loss.backward()
-            self.push_training_data(data_pack, pred, target, loss)
+            self.push_training_data(data_pack, s_pred, t_pred, loss)
         self.optim.step()
 
-    def push_training_data(self, data_pack, pred, target, loss):
+    def push_training_data(self, data_pack, s_pred, t_pred, loss):
         tb_datapack = tensorboard_helper.TensorboardDatapack()
         tb_datapack.set_training(True)
         tb_datapack.set_iteration(self.iteration)
-        tb_datapack.add_histogram({'distribution/pred': pred})
-        tb_datapack.add_histogram({'distribution/target': target})
+        tb_datapack.add_histogram({'distribution/s_pred': s_pred})
+        tb_datapack.add_histogram({'distribution/t_pred': t_pred})
         tb_datapack.add_scalar({'loss/train': loss})
         self.tb_pusher.push_to_tensorboard(tb_datapack)
 

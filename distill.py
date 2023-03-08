@@ -45,7 +45,7 @@ def distill_backbone(opt, load_t_weights_path:str, load_s_weights_path:str, s_la
     utils.safe_load_weights(t_model, weights)
     # eval(): switch to inference mode
     t_model = t_model.eval()
-    print(t_model.backbone[0])
+    print(f"t_model.backbone:{t_model.backbone[0]}")
 
     # setup student model
     s_model:COTR = build_model(opt)
@@ -55,19 +55,21 @@ def distill_backbone(opt, load_t_weights_path:str, load_s_weights_path:str, s_la
 
     ## modify body layer
     s_model.backbone[0].body = IntermediateLayerGetter(s_model.backbone[0].body, {s_layer: "0"})
-    print(s_model.backbone[0])
+    print(f"s_model.backbone:{s_model.backbone[0]}")
     s_model.cuda()
     s_model.train(True)
-
-    return
 
     #
     if opt.enable_zoom:
         train_dset = cotr_dataset.COTRZoomDataset(opt, 'train')
         val_dset = cotr_dataset.COTRZoomDataset(opt, 'val')
     else:
+        TR("train dset")
         train_dset = cotr_dataset.COTRDataset(opt, 'train')
+        TR("val dset")
         val_dset = cotr_dataset.COTRDataset(opt, 'val')
+
+    print(f"val_dset:{len(val_dset)}")
 
     train_loader = DataLoader(train_dset, batch_size=opt.batch_size,
                               shuffle=opt.shuffle_data, num_workers=opt.workers,
@@ -75,20 +77,16 @@ def distill_backbone(opt, load_t_weights_path:str, load_s_weights_path:str, s_la
     val_loader = DataLoader(val_dset, batch_size=opt.batch_size,
                             shuffle=opt.shuffle_data, num_workers=opt.workers,
                             drop_last=True, worker_init_fn=utils.worker_init_fn, pin_memory=True)
-
+    # optimizer
     optim_list = [
-        {"params": s_model.transformer.parameters(), "lr": opt.learning_rate},
-        {"params": s_model.corr_embed.parameters(), "lr": opt.learning_rate},
-        {"params": s_model.query_proj.parameters(), "lr": opt.learning_rate},
-        {"params": s_model.input_proj.parameters(), "lr": opt.learning_rate},
+        {"params": s_model.backbone.parameters(), "lr": opt.learning_rate},
     ]
-    if opt.lr_backbone > 0:
-        optim_list.append(
-            {"params": s_model.backbone.parameters(), "lr": opt.lr_backbone})
-
     optim = torch.optim.Adam(optim_list)
-    trainer = COTRBackboneDistiller(t_model, s_model, optim, None, train_loader, val_loader)
-    trainer.train()
+
+    # distiller
+    distiller = COTRBackboneDistiller(opt, t_model.backbone[0], s_model.backbone[0],
+                                    optim, None, train_loader, val_loader)
+    distiller.train()
 
 
 if __name__ == "__main__":
@@ -121,8 +119,6 @@ if __name__ == "__main__":
 
     parser.add_argument('--learning_rate', type=float,
                         default=1e-4, help='learning rate')
-    parser.add_argument('--lr_backbone', type=float,
-                        default=1e-5, help='backbone learning rate')
     parser.add_argument('--batch_size', type=int,
                         default=32, help='batch size for training')
     parser.add_argument('--cycle_consis', type=str2bool, default=True,
