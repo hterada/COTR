@@ -89,8 +89,8 @@ class BackboneBase(nn.Module):
         TR(f"BackboneBase: INPUT tensor_list:{type(tensor_list), tensor_list.tensors.shape}")
         left = self.body(tensor_list.tensors[..., 0:constants.MAX_SIZE])
         right = self.body(tensor_list.tensors[..., constants.MAX_SIZE:2 * constants.MAX_SIZE])
-        TR(f"left : {[(k, v.shape) for k,v in left.items()]}")
-        TR(f"right: {[(k, v.shape) for k,v in right.items()]}")
+        # TR(f"left : {[(k, v.shape) for k,v in left.items()]}")
+        # TR(f"right: {[(k, v.shape) for k,v in right.items()]}")
         xs = {}
         for k in left.keys():
             xs[k] = torch.cat([left[k], right[k]], dim=-1)
@@ -100,9 +100,9 @@ class BackboneBase(nn.Module):
             assert m is not None
             mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
             out[name] = NestedTensor(x, mask)
-        TR(f"BackboneBase out:{len(out)}")
-        TR(f"BackboneBase out:{ [(k, type(v.tensors), v.tensors.shape) for k,v in out.items()] }")
-        TR(f"BackboneBase out.keys():{out.keys()}")
+        # TR(f"BackboneBase out:{len(out)}")
+        # TR(f"BackboneBase out:{ [(k, type(v.tensors), v.tensors.shape) for k,v in out.items()] }") # (24, 1024, 16, 32)
+        # TR(f"BackboneBase out.keys():{out.keys()}")
         return out
 
 

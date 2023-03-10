@@ -32,57 +32,66 @@ class COTRBackboneDistiller(base_trainer.BaseTrainer):
 
     @profile
     def validate_batch(self, data_pack):
-        return
-        assert self.model.training is False
+        assert self.t_model.training is False
+        assert self.s_model.training is False
+
         with torch.no_grad():
             img = data_pack['image'].cuda()
-            query = data_pack['queries'].cuda()
-            target = data_pack['targets'].cuda()
+            b,c,h,w = img.shape
+
             self.optim.zero_grad()
-            pred = self.model(img, query)['pred_corrs']
-            loss = torch.nn.functional.mse_loss(pred, target)
-            if self.opt.cycle_consis and self.opt.bidirectional:
-                cycle = self.model(img, pred)['pred_corrs']
-                mask = torch.norm(cycle - query, dim=-1) < 10 / constants.MAX_SIZE
-                if mask.sum() > 0:
-                    cycle_loss = torch.nn.functional.mse_loss(cycle[mask], query[mask])
-                    loss += cycle_loss
-            elif self.opt.cycle_consis and not self.opt.bidirectional:
-                img_reverse = torch.cat([img[..., constants.MAX_SIZE:], img[..., :constants.MAX_SIZE]], axis=-1)
-                query_reverse = pred.clone()
-                query_reverse[..., 0] = query_reverse[..., 0] - 0.5
-                cycle = self.model(img_reverse, query_reverse)['pred_corrs']
-                cycle[..., 0] = cycle[..., 0] - 0.5
-                mask = torch.norm(cycle - query, dim=-1) < 10 / constants.MAX_SIZE
-                if mask.sum() > 0:
-                    cycle_loss = torch.nn.functional.mse_loss(cycle[mask], query[mask])
-                    loss += cycle_loss
+            mask = torch.ones((b,h,w), dtype=torch.bool, device=img.device)
+            nested_tensor = NestedTensor(img, mask)
+            # student
+            s_pred = self.s_model(nested_tensor)
+            # teacher
+            t_pred = self.t_model(nested_tensor)
+
+            loss = torch.nn.functional.mse_loss(s_pred['0'].tensors, t_pred['0'].tensors)
+            # if self.opt.cycle_consis and self.opt.bidirectional:
+            #     cycle = self.model(img, pred)['pred_corrs']
+            #     mask = torch.norm(cycle - query, dim=-1) < 10 / constants.MAX_SIZE
+            #     if mask.sum() > 0:
+            #         cycle_loss = torch.nn.functional.mse_loss(cycle[mask], query[mask])
+            #         loss += cycle_loss
+            # elif self.opt.cycle_consis and not self.opt.bidirectional:
+            #     img_reverse = torch.cat([img[..., constants.MAX_SIZE:], img[..., :constants.MAX_SIZE]], axis=-1)
+            #     query_reverse = pred.clone()
+            #     query_reverse[..., 0] = query_reverse[..., 0] - 0.5
+            #     cycle = self.model(img_reverse, query_reverse)['pred_corrs']
+            #     cycle[..., 0] = cycle[..., 0] - 0.5
+            #     mask = torch.norm(cycle - query, dim=-1) < 10 / constants.MAX_SIZE
+            #     if mask.sum() > 0:
+            #         cycle_loss = torch.nn.functional.mse_loss(cycle[mask], query[mask])
+            #         loss += cycle_loss
             loss_data = loss.data.item()
             if np.isnan(loss_data):
                 print('loss is nan while validating')
-            return loss_data, pred
+            return loss_data
 
     def validate(self):
         '''validate for whole validation dataset
         '''
-        return
-        training = self.model.training
-        self.model.eval()
+        # inferring mode
+        self.t_model.eval()
+        self.s_model.eval()
+
         val_loss_list = []
         for batch_idx, data_pack in tqdm.tqdm(
                 enumerate(self.val_loader), total=len(self.val_loader),
                 desc='Valid iteration=%d' % self.iteration, ncols=80,
                 leave=False):
-            loss_data, pred = self.validate_batch(data_pack)
+            # validate a batch
+            loss_data = self.validate_batch(data_pack)
             val_loss_list.append(loss_data)
+
         mean_loss = np.array(val_loss_list).mean()
-        validation_data = {'val_loss': mean_loss,
-                           'pred': pred,
-                           }
+        validation_data = {'val_loss': mean_loss }
         self.push_validation_data(data_pack, validation_data)
         self.save_model()
-        if training:
-            self.model.train()
+
+        # training mode
+        self.s_model.train()
 
     def save_model(self):
         torch.save({
@@ -115,25 +124,26 @@ class COTRBackboneDistiller(base_trainer.BaseTrainer):
 
     def push_validation_data(self, data_pack, validation_data):
         val_loss = validation_data['val_loss']
-        pred_corrs = np.concatenate([data_pack['queries'].numpy(), validation_data['pred'].cpu().numpy()], axis=-1)
-        pred_corrs = self.draw_corrs(data_pack['image'], pred_corrs)
-        gt_corrs = np.concatenate([data_pack['queries'].numpy(), data_pack['targets'].cpu().numpy()], axis=-1)
-        gt_corrs = self.draw_corrs(data_pack['image'], gt_corrs, (0, 255, 0))
+        # pred_corrs = np.concatenate([data_pack['queries'].numpy(), validation_data['pred'].cpu().numpy()], axis=-1)
+        # pred_corrs = self.draw_corrs(data_pack['image'], pred_corrs)
+        # gt_corrs = np.concatenate([data_pack['queries'].numpy(), data_pack['targets'].cpu().numpy()], axis=-1)
+        # gt_corrs = self.draw_corrs(data_pack['image'], gt_corrs, (0, 255, 0))
 
-        gt_img = vutils.make_grid(gt_corrs, normalize=True, scale_each=True)
-        pred_img = vutils.make_grid(pred_corrs, normalize=True, scale_each=True)
+        # gt_img = vutils.make_grid(gt_corrs, normalize=True, scale_each=True)
+        # pred_img = vutils.make_grid(pred_corrs, normalize=True, scale_each=True)
         tb_datapack = tensorboard_helper.TensorboardDatapack()
         tb_datapack.set_training(False)
         tb_datapack.set_iteration(self.iteration)
         tb_datapack.add_scalar({'loss/val': val_loss})
-        tb_datapack.add_image({'image/gt_corrs': gt_img})
-        tb_datapack.add_image({'image/pred_corrs': pred_img})
+        # tb_datapack.add_image({'image/gt_corrs': gt_img})
+        # tb_datapack.add_image({'image/pred_corrs': pred_img})
         self.tb_pusher.push_to_tensorboard(tb_datapack)
 
     def train_batch(self, data_pack):
         '''train for one batch of data
         '''
         TR()
+        assert self.t_model.training == False
         img = data_pack['image'].cuda()
         b,c,h,w = img.shape
         # img.shape = (24, 3, 256, 512)
