@@ -161,19 +161,22 @@ def np_img_to_torch_img(np_img):
         raise ValueError('cannot process this image with shape: {0}'.format(np_img.shape))
 
 
-def safe_load_weights(model, saved_weights):
+def safe_load_weights(model, saved_weights)->bool:
     try:
         model.load_state_dict(saved_weights)
+        print('weights safely loaded(1)')
     except RuntimeError:
         try:
             weights = saved_weights
             weights = {k.replace('module.', ''): v for k, v in weights.items()}
             model.load_state_dict(weights)
+            print('weights safely loaded(2)')
         except RuntimeError:
             try:
                 weights = saved_weights
                 weights = {'module.' + k: v for k, v in weights.items()}
                 model.load_state_dict(weights)
+                print('weights safely loaded(3)')
             except RuntimeError:
                 try:
                     pretrained_dict = saved_weights
@@ -187,10 +190,11 @@ def safe_load_weights(model, saved_weights):
                     notification += ['pretrained weights PARTIALLY loaded, following are missing:']
                     notification += [str(non_match_keys)]
                     print_notification(notification, 'WARNING')
+                    return False #NG
                 except Exception as e:
                     print(f'pretrained weights loading failed {e}')
                     exit()
-    print('weights safely loaded')
+    return True #OK
 
 
 def visualize_corrs(img1, img2, corrs, mask=None):

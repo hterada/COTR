@@ -82,8 +82,12 @@ class TensorboardTextHelper(TensorboardHelperBase):
 
 
 class TensorboardPusher():
-    def __init__(self, opt):
-        self.tb_writer = tensorboardX.SummaryWriter(opt.tb_out)
+    def __init__(self, opt=None):
+        if opt is not None:
+            self.__build_member(opt.tb_out)
+
+    def __build_member(self, tb_out):
+        self.tb_writer = tensorboardX.SummaryWriter(tb_out)
         scalar_helper = TensorboardScalarHelper(self.tb_writer)
         histogram_helper = TensorboardHistogramHelper(self.tb_writer)
         image_helper = TensorboardImageHelper(self.tb_writer)
@@ -95,3 +99,10 @@ class TensorboardPusher():
         for helper in self.helper_list:
             helper.add_data(tb_datapack)
         self.tb_writer.flush()
+
+    @classmethod
+    def create( cls, tb_out ):
+        obj = cls()
+        obj.__build_member( tb_out )
+        return obj
+

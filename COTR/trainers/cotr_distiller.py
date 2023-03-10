@@ -1,3 +1,4 @@
+from typing import Optional
 import os
 import math
 import os.path as osp
@@ -10,30 +11,37 @@ import torchvision.utils as vutils
 from PIL import Image, ImageDraw
 
 
+from COTR.models import COTR
 from COTR.utils import utils, debug_utils, constants
 from COTR.utils.utils import TR
 from COTR.utils.line_profiler_header import *
-from COTR.trainers import base_trainer, tensorboard_helper
+from COTR.trainers import tensorboard_helper, base_distiller
 from COTR.projector import pcd_projector
 from COTR.models.misc import NestedTensor
 
 
-class COTRBackboneDistiller(base_trainer.BaseTrainer):
-    def __init__(self, opt, t_model, s_model,
-                 optimizer, criterion,
-                 train_loader, val_loader):
-        # このクラスでは、極力 opt を使いたくない。
-        # super クラスの都合のための opt 設定
-        opt.load_weights = None
-        super().__init__(opt, s_model, optimizer, criterion,
-                         train_loader, val_loader)
-        self.t_model = t_model
-        self.s_model = s_model # same as self.model
+class COTRDistiller(base_distiller.BaseDistiller):
+    def __init__(self, t_model:COTR, s_model:COTR,
+                optimizer, criterion,
+                train_loader, val_loader,
+                use_cuda:bool, out_dir:str, tb_out_dir:str, max_iter:int, valid_iter:int,
+                opt_str:str,
+                resume:bool,
+                t_weights_path:str, s_weights_path:Optional[str]=None):
+
+        super().__init__(t_model, s_model, optimizer, criterion,
+                         train_loader, val_loader, use_cuda, out_dir, tb_out_dir,
+                         max_iter, valid_iter,
+                         opt_str,
+                         resume, t_weights_path, s_weights_path)
+
+        self.t_backbone = t_model.backbone[0]
+        self.s_backbone = s_model.backbone[0]
 
     @profile
     def validate_batch(self, data_pack):
-        assert self.t_model.training is False
-        assert self.s_model.training is False
+        assert self.t_backbone.training is False
+        assert self.s_backbone.training is False
 
         with torch.no_grad():
             img = data_pack['image'].cuda()
@@ -43,9 +51,9 @@ class COTRBackboneDistiller(base_trainer.BaseTrainer):
             mask = torch.ones((b,h,w), dtype=torch.bool, device=img.device)
             nested_tensor = NestedTensor(img, mask)
             # student
-            s_pred = self.s_model(nested_tensor)
+            s_pred = self.s_backbone(nested_tensor)
             # teacher
-            t_pred = self.t_model(nested_tensor)
+            t_pred = self.t_backbone(nested_tensor)
 
             loss = torch.nn.functional.mse_loss(s_pred['0'].tensors, t_pred['0'].tensors)
             # if self.opt.cycle_consis and self.opt.bidirectional:
@@ -73,8 +81,8 @@ class COTRBackboneDistiller(base_trainer.BaseTrainer):
         '''validate for whole validation dataset
         '''
         # inferring mode
-        self.t_model.eval()
-        self.s_model.eval()
+        self.t_backbone.eval()
+        self.s_backbone.eval()
 
         val_loss_list = []
         for batch_idx, data_pack in tqdm.tqdm(
@@ -91,21 +99,21 @@ class COTRBackboneDistiller(base_trainer.BaseTrainer):
         self.save_model()
 
         # training mode
-        self.s_model.train()
+        self.s_backbone.train()
 
     def save_model(self):
         torch.save({
             'epoch': self.epoch,
             'iteration': self.iteration,
             'optim_state_dict': self.optim.state_dict(),
-            'model_state_dict': self.model.state_dict(),
+            'model_state_dict': self.s_model.state_dict(),
         }, osp.join(self.out, 'checkpoint.pth.tar'))
         if self.iteration % (10 * self.valid_iter) == 0:
             torch.save({
                 'epoch': self.epoch,
                 'iteration': self.iteration,
                 'optim_state_dict': self.optim.state_dict(),
-                'model_state_dict': self.model.state_dict(),
+                'model_state_dict': self.s_model.state_dict(),
             }, osp.join(self.out, f'{self.iteration}_checkpoint.pth.tar'))
 
     def draw_corrs(self, imgs, corrs, col=(255, 0, 0)):
@@ -143,7 +151,7 @@ class COTRBackboneDistiller(base_trainer.BaseTrainer):
         '''train for one batch of data
         '''
         TR()
-        assert self.t_model.training == False
+        assert self.t_backbone.training == False
         img = data_pack['image'].cuda()
         b,c,h,w = img.shape
         # img.shape = (24, 3, 256, 512)
@@ -152,15 +160,14 @@ class COTRBackboneDistiller(base_trainer.BaseTrainer):
         # target = data_pack['targets'].cuda()
 
         self.optim.zero_grad()
-        TR(f"model:{type(self.model)}")
         mask = torch.ones((b,h,w), dtype=torch.bool, device=img.device)
         nested_tensor = NestedTensor(img, mask)
         # student
-        s_pred = self.s_model(nested_tensor)
+        s_pred = self.s_backbone(nested_tensor)
         assert list(s_pred.keys())==['0']
         print(f"s_pred:{type(s_pred), s_pred['0'].tensors.shape}")
         # teacher
-        t_pred = self.t_model(nested_tensor)
+        t_pred = self.t_backbone(nested_tensor)
         assert list(t_pred.keys())==['0']
         print(f"t_pred:{type(t_pred), t_pred['0'].tensors.shape}")
 
@@ -200,7 +207,7 @@ class COTRBackboneDistiller(base_trainer.BaseTrainer):
         tb_datapack.add_scalar({'loss/train': loss})
         self.tb_pusher.push_to_tensorboard(tb_datapack)
 
-    def resume(self):
+    def resume(self): #TODO:
         '''resume training:
         resume from the recorded epoch, iteration, and saved weights.
         resume from the model with the same name.
@@ -223,16 +230,26 @@ class COTRBackboneDistiller(base_trainer.BaseTrainer):
         self.load_pretrained_weights()
         self.optim.load_state_dict(checkpoint['optim_state_dict'])
 
-    def load_pretrained_weights(self):
+    def load_pretrained_weights(self, t_weights_path:str, s_weights_path:Optional[str]):
         '''
         load pretrained weights from another model
         '''
-        # if hasattr(self.opt, 'resume'):
-        #     assert self.opt.resume is False
-        assert os.path.isfile(self.opt.load_weights_path), self.opt.load_weights_path
+        assert t_weights_path is not None
+        assert os.path.isfile(t_weights_path), f"NOT a file:{t_weights_path}"
 
-        saved_weights = torch.load(self.opt.load_weights_path)['model_state_dict']
-        utils.safe_load_weights(self.model, saved_weights)
-        content_list = []
-        content_list += [f'Loaded pretrained weights from {self.opt.load_weights_path}']
-        utils.print_notification(content_list)
+        # teacher
+        def load( weights_path, model, sym:str):
+            print(f"Load pretrained ({sym}) weights from {weights_path}...")
+            saved_weights = torch.load(weights_path)['model_state_dict']
+            if utils.safe_load_weights(model, saved_weights)==True:
+                content_list = []
+                content_list += [f'Loaded pretrained ({sym}) weights from {weights_path}']
+                utils.print_notification(content_list)
+
+        load( t_weights_path, self.t_model, 't' )
+
+        # student
+        if s_weights_path is not None:
+            assert os.path.isfile(s_weights_path), f"NOT a file:{s_weights_path}"
+            load( s_weights_path, self.s_model, 's' )
+

@@ -14,7 +14,7 @@ from COTR.utils.utils import TR
 from COTR.utils.line_profiler_header import *
 
 from COTR.datasets import cotr_dataset
-from COTR.trainers.cotr_distiller import COTRBackboneDistiller
+from COTR.trainers.cotr_distiller import COTRDistiller
 from COTR.global_configs import general_config
 from COTR.options.options import *
 from COTR.options.options_utils import *
@@ -26,7 +26,7 @@ utils.fix_randomness(0)
 
 
 @profile
-def distill_backbone(opt, load_t_weights_path:str, load_s_weights_path:str, s_layer:str):
+def distill_backbone(opt, t_weights_path:str, s_weights_path:str, s_layer:str):
     # print env info
     pprint.pprint(dict(os.environ), width=1)
     result = subprocess.Popen(["nvidia-smi"], stdout=subprocess.PIPE)
@@ -41,7 +41,7 @@ def distill_backbone(opt, load_t_weights_path:str, load_s_weights_path:str, s_la
     TR()
     t_model:COTR = build_model(opt)
     t_model = t_model.cuda()
-    weights = torch.load(load_t_weights_path, map_location='cpu')['model_state_dict']
+    weights = torch.load(t_weights_path, map_location='cpu')['model_state_dict']
     utils.safe_load_weights(t_model, weights)
     # eval(): switch to inference mode
     t_model = t_model.eval()
@@ -50,7 +50,7 @@ def distill_backbone(opt, load_t_weights_path:str, load_s_weights_path:str, s_la
     # setup student model
     s_model:COTR = build_model(opt)
     s_model = s_model.cuda()
-    weights = torch.load(load_s_weights_path, map_location='cpu')['model_state_dict']
+    weights = torch.load(s_weights_path, map_location='cpu')['model_state_dict']
     utils.safe_load_weights(s_model, weights)
 
     ## modify body layer
@@ -87,9 +87,15 @@ def distill_backbone(opt, load_t_weights_path:str, load_s_weights_path:str, s_la
     ]
     optim = torch.optim.Adam(optim_list)
 
+    opt_str = options_utils.opt_to_string(opt)
+
     # distiller
-    distiller = COTRBackboneDistiller(opt, t_model.backbone[0], s_model.backbone[0],
-                                    optim, None, train_loader, val_loader)
+    distiller = COTRDistiller(t_model, s_model,
+                              optim, None, train_loader, val_loader,
+                              opt.use_cuda, opt.out, opt.tb_out, opt.max_iter, opt.valid_iter,
+                              opt_str,
+                              opt.resume, t_weights_path, s_weights_path
+                              )
     distiller.train()
 
 
@@ -175,18 +181,18 @@ if __name__ == "__main__":
             opt.resume = False
     assert (bool(opt.load_s_weights) and opt.resume) == False
     # teacher
-    load_t_weights_path = None
+    t_weights_path = None
     if opt.load_t_weights:
-        load_t_weights_path = os.path.join(opt.load_t_weights, 'checkpoint.pth.tar')
+        t_weights_path = os.path.join(opt.load_t_weights, 'checkpoint.pth.tar')
 
     # student
-    load_s_weights_path = None
+    s_weights_path = None
     if opt.load_s_weights:
-        load_s_weights_path = os.path.join(opt.load_s_weights, 'checkpoint.pth.tar')
+        s_weights_path = os.path.join(opt.load_s_weights, 'checkpoint.pth.tar')
 
     # resume
     if opt.resume:
-        load_s_weights_path = os.path.join(opt.out, 'checkpoint.pth.tar')
+        s_weights_path = os.path.join(opt.out, 'checkpoint.pth.tar')
 
     # for
 
@@ -201,4 +207,4 @@ if __name__ == "__main__":
 
     save_opt(opt)
     TR()
-    distill_backbone(opt, load_t_weights_path, load_s_weights_path, opt.s_layer)
+    distill_backbone(opt, t_weights_path, s_weights_path, opt.s_layer)
