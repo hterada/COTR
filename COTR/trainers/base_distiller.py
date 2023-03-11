@@ -32,6 +32,10 @@ class BaseDistiller(abc.ABC):
         self.use_cuda = use_cuda
         self.t_model = t_model
         self.s_model = s_model
+        # backbone
+        self.t_backbone = self.get_t_backbone()
+        self.s_backbone = self.get_s_backbone()
+
         self.optim = optimizer
         self.criterion = criterion
         self.train_loader = train_loader
@@ -62,6 +66,24 @@ class BaseDistiller(abc.ABC):
         self.tb_pusher.push_to_tensorboard(tb_datapack)
 
     @abc.abstractmethod
+    def get_t_backbone(self)->Optional[nn.Module]:
+        """Get teacher's backbone
+
+        Returns:
+            Optional[nn.Module]: _description_
+        """
+        return None
+
+    @abc.abstractmethod
+    def get_s_backbone(self)->Optional[nn.Module]:
+        """Get student's backbone
+
+        Returns:
+            Optional[nn.Module]: _description_
+        """
+        return None
+
+    @abc.abstractmethod
     def load_pretrained_weights(self, t_weights_path:str, s_weights_path:Optional[str]):
         pass
 
@@ -86,7 +108,7 @@ class BaseDistiller(abc.ABC):
         '''
         TR("train_epoch")
         # training mode
-        self.s_model.train()
+        self.s_backbone.train()
         print(f"trail_loader len:{len(self.train_loader)}")
         for batch_idx, data_pack in tqdm.tqdm(enumerate(self.train_loader),
                                               initial=self.iteration % len(

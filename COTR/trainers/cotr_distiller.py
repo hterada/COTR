@@ -6,6 +6,7 @@ import time
 
 import tqdm
 import torch
+import torch.nn as nn
 import numpy as np
 import torchvision.utils as vutils
 from PIL import Image, ImageDraw
@@ -35,8 +36,11 @@ class COTRDistiller(base_distiller.BaseDistiller):
                          opt_str,
                          resume, t_weights_path, s_weights_path)
 
-        self.t_backbone = t_model.backbone[0]
-        self.s_backbone = s_model.backbone[0]
+    def get_t_backbone(self)->Optional[nn.Module]:
+        return self.t_model.backbone[0]
+
+    def get_s_backbone(self)->Optional[nn.Module]:
+        return self.s_model.backbone[0]
 
     @profile
     def validate_batch(self, data_pack):
@@ -46,16 +50,19 @@ class COTRDistiller(base_distiller.BaseDistiller):
         with torch.no_grad():
             img = data_pack['image'].cuda()
             b,c,h,w = img.shape
+            query = data_pack['queries'].cuda()
+            # target = data_pack['targets'].cuda()
+            s_pred = self.s_model(img, query)['pred_corrs']
 
             self.optim.zero_grad()
             mask = torch.ones((b,h,w), dtype=torch.bool, device=img.device)
             nested_tensor = NestedTensor(img, mask)
             # student
-            s_pred = self.s_backbone(nested_tensor)
+            sb_pred = self.s_backbone(nested_tensor)
             # teacher
-            t_pred = self.t_backbone(nested_tensor)
+            tb_pred = self.t_backbone(nested_tensor)
 
-            loss = torch.nn.functional.mse_loss(s_pred['0'].tensors, t_pred['0'].tensors)
+            loss = torch.nn.functional.mse_loss(sb_pred['0'].tensors, tb_pred['0'].tensors)
             # if self.opt.cycle_consis and self.opt.bidirectional:
             #     cycle = self.model(img, pred)['pred_corrs']
             #     mask = torch.norm(cycle - query, dim=-1) < 10 / constants.MAX_SIZE
@@ -75,7 +82,7 @@ class COTRDistiller(base_distiller.BaseDistiller):
             loss_data = loss.data.item()
             if np.isnan(loss_data):
                 print('loss is nan while validating')
-            return loss_data
+            return loss_data, s_pred
 
     def validate(self):
         '''validate for whole validation dataset
@@ -90,11 +97,11 @@ class COTRDistiller(base_distiller.BaseDistiller):
                 desc='Valid iteration=%d' % self.iteration, ncols=80,
                 leave=False):
             # validate a batch
-            loss_data = self.validate_batch(data_pack)
+            loss_data, pred = self.validate_batch(data_pack)
             val_loss_list.append(loss_data)
 
         mean_loss = np.array(val_loss_list).mean()
-        validation_data = {'val_loss': mean_loss }
+        validation_data = {'val_loss': mean_loss, 'pred': pred }
         self.push_validation_data(data_pack, validation_data)
         self.save_model()
 
@@ -132,19 +139,19 @@ class COTRDistiller(base_distiller.BaseDistiller):
 
     def push_validation_data(self, data_pack, validation_data):
         val_loss = validation_data['val_loss']
-        # pred_corrs = np.concatenate([data_pack['queries'].numpy(), validation_data['pred'].cpu().numpy()], axis=-1)
-        # pred_corrs = self.draw_corrs(data_pack['image'], pred_corrs)
-        # gt_corrs = np.concatenate([data_pack['queries'].numpy(), data_pack['targets'].cpu().numpy()], axis=-1)
-        # gt_corrs = self.draw_corrs(data_pack['image'], gt_corrs, (0, 255, 0))
+        pred_corrs = np.concatenate([data_pack['queries'].numpy(), validation_data['pred'].cpu().numpy()], axis=-1)
+        pred_corrs = self.draw_corrs(data_pack['image'], pred_corrs)
+        gt_corrs = np.concatenate([data_pack['queries'].numpy(), data_pack['targets'].cpu().numpy()], axis=-1)
+        gt_corrs = self.draw_corrs(data_pack['image'], gt_corrs, (0, 255, 0))
 
-        # gt_img = vutils.make_grid(gt_corrs, normalize=True, scale_each=True)
-        # pred_img = vutils.make_grid(pred_corrs, normalize=True, scale_each=True)
+        gt_img = vutils.make_grid(gt_corrs, normalize=True, scale_each=True)
+        pred_img = vutils.make_grid(pred_corrs, normalize=True, scale_each=True)
         tb_datapack = tensorboard_helper.TensorboardDatapack()
         tb_datapack.set_training(False)
         tb_datapack.set_iteration(self.iteration)
         tb_datapack.add_scalar({'loss/val': val_loss})
-        # tb_datapack.add_image({'image/gt_corrs': gt_img})
-        # tb_datapack.add_image({'image/pred_corrs': pred_img})
+        tb_datapack.add_image({'image/gt_corrs': gt_img})
+        tb_datapack.add_image({'image/pred_corrs': pred_img})
         self.tb_pusher.push_to_tensorboard(tb_datapack)
 
     def train_batch(self, data_pack):
