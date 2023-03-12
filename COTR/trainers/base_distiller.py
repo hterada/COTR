@@ -101,7 +101,6 @@ class BaseDistiller(abc.ABC):
         '''
         pass
 
-    @profile
     def train_epoch(self):
         '''train for one epoch
         one epoch is iterating the whole training dataset once
@@ -126,10 +125,8 @@ class BaseDistiller(abc.ABC):
             # self.iteration = iteration
             # self.iteration += 1
             if self.iteration % self.valid_iter == 0:
-                time.sleep(2)  # Prevent possible deadlock during epoch transition
-                TR()
+                time.sleep(2)  # Prevent possible deadlock during epoch transition TODO: ?
                 self.validate()
-            TR()
             self.train_batch(data_pack)
 
             if self.iteration >= self.max_iter:
