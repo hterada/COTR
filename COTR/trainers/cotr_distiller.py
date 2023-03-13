@@ -99,7 +99,9 @@ class COTRDistiller(base_distiller.BaseDistiller):
 
         mean_loss = np.array(val_loss_list).mean()
         mean_cc = np.array(cc_list).mean()
-        validation_data = {'val_loss': mean_loss, 'pred': pred, 'cc_diff':mean_cc }
+        max_cc = np.array(cc_list).max()
+        min_cc = np.array(cc_list).min()
+        validation_data = {'val_loss': mean_loss, 'pred': pred, 'ccd':{'mean':mean_cc, 'max':max_cc, 'min':min_cc} }
         self.push_validation_data(data_pack, validation_data)
         self.save_model()
 
@@ -108,7 +110,7 @@ class COTRDistiller(base_distiller.BaseDistiller):
 
     def push_validation_data(self, data_pack, validation_data):
         val_loss = validation_data['val_loss']
-        cc_diff = validation_data['cc_diff']
+        ccd = validation_data['ccd']
         pred_corrs = np.concatenate([data_pack['queries'].numpy(), validation_data['pred'].cpu().numpy()], axis=-1)
         pred_corrs = self.draw_corrs(data_pack['image'], pred_corrs)
         gt_corrs = np.concatenate([data_pack['queries'].numpy(), data_pack['targets'].cpu().numpy()], axis=-1)
@@ -120,7 +122,7 @@ class COTRDistiller(base_distiller.BaseDistiller):
         tb_datapack.set_training(False)
         tb_datapack.set_iteration(self.iteration)
         tb_datapack.add_scalar({'loss/val': val_loss})
-        tb_datapack.add_scalar({'cc_diff': cc_diff})
+        tb_datapack.add_scalar({'ccd': ccd})
         tb_datapack.add_image({'image/gt_corrs': gt_img})
         tb_datapack.add_image({'image/pred_corrs': pred_img})
         self.tb_pusher.push_to_tensorboard(tb_datapack)
@@ -171,15 +173,14 @@ class COTRDistiller(base_distiller.BaseDistiller):
         mask = torch.ones((b,h,w), dtype=torch.bool, device=img.device)
         nested_tensor = NestedTensor(img, mask)
         # student
-        s_pred = self.s_backbone(nested_tensor)
-        assert list(s_pred.keys())==['0']
-        print(f"s_pred:{type(s_pred), s_pred['0'].tensors.shape}")
-        # teacher
-        t_pred = self.t_backbone(nested_tensor)
-        assert list(t_pred.keys())==['0']
-        print(f"t_pred:{type(t_pred), t_pred['0'].tensors.shape}")
+        sb_pred = self.s_backbone(nested_tensor)
+        assert list(sb_pred.keys())==['0']
 
-        loss = torch.nn.functional.mse_loss(s_pred['0'].tensors, t_pred['0'].tensors)
+        # teacher
+        tb_pred = self.t_backbone(nested_tensor)
+        assert list(tb_pred.keys())==['0']
+
+        loss = torch.nn.functional.mse_loss(sb_pred['0'].tensors, tb_pred['0'].tensors)
 
         # if self.opt.cycle_consis and self.opt.bidirectional:
         #     cycle = self.model(img, pred)['pred_corrs']
@@ -203,16 +204,29 @@ class COTRDistiller(base_distiller.BaseDistiller):
             self.optim.zero_grad()
         else:
             loss.backward()
-            self.push_training_data(data_pack, s_pred['0'].tensors, t_pred['0'].tensors, loss)
+
+            # log
+            ## cycle consistency
+            with torch.no_grad():
+                query = data_pack['queries'].cuda()
+                s_pred = self.s_model(img, query)['pred_corrs']
+                t_pred = self.t_model(img, query)['pred_corrs']
+
+                t_cc = self.__class__.cycle_consistency_bidirectional(self.t_model, img, query, t_pred)
+                s_cc = self.__class__.cycle_consistency_bidirectional(self.s_model, img, query, s_pred)
+
+            self.push_training_data(data_pack, sb_pred['0'].tensors, tb_pred['0'].tensors, loss,
+                                    {'t_cc':t_cc, 's_cc':s_cc})
         self.optim.step()
 
-    def push_training_data(self, data_pack, s_pred, t_pred, loss):
+    def push_training_data(self, data_pack, s_pred, t_pred, loss, ccd):
         tb_datapack = tensorboard_helper.TensorboardDatapack()
         tb_datapack.set_training(True)
         tb_datapack.set_iteration(self.iteration)
         tb_datapack.add_histogram({'distribution/s_pred': s_pred})
         tb_datapack.add_histogram({'distribution/t_pred': t_pred})
         tb_datapack.add_scalar({'loss/train': loss})
+        tb_datapack.add_scalar({'ccd': ccd})
         self.tb_pusher.push_to_tensorboard(tb_datapack)
 
     def resume(self): #TODO:
