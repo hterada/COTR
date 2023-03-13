@@ -101,7 +101,7 @@ class COTRDistiller(base_distiller.BaseDistiller):
         mean_cc = np.array(cc_list).mean()
         max_cc = np.array(cc_list).max()
         min_cc = np.array(cc_list).min()
-        validation_data = {'val_loss': mean_loss, 'pred': pred, 'ccd':{'mean':mean_cc, 'max':max_cc, 'min':min_cc} }
+        validation_data = {'val_loss': mean_loss, 'pred': pred, 'ccd_mean':mean_cc, 'ccd_max':max_cc, 'ccd_min':min_cc}
         self.push_validation_data(data_pack, validation_data)
         self.save_model()
 
@@ -110,7 +110,9 @@ class COTRDistiller(base_distiller.BaseDistiller):
 
     def push_validation_data(self, data_pack, validation_data):
         val_loss = validation_data['val_loss']
-        ccd = validation_data['ccd']
+        ccd_mean = validation_data['ccd_mean']
+        ccd_max = validation_data['ccd_max']
+        ccd_min = validation_data['ccd_min']
         pred_corrs = np.concatenate([data_pack['queries'].numpy(), validation_data['pred'].cpu().numpy()], axis=-1)
         pred_corrs = self.draw_corrs(data_pack['image'], pred_corrs)
         gt_corrs = np.concatenate([data_pack['queries'].numpy(), data_pack['targets'].cpu().numpy()], axis=-1)
@@ -122,7 +124,7 @@ class COTRDistiller(base_distiller.BaseDistiller):
         tb_datapack.set_training(False)
         tb_datapack.set_iteration(self.iteration)
         tb_datapack.add_scalar({'loss/val': val_loss})
-        tb_datapack.add_scalar({'ccd': ccd})
+        tb_datapack.add_scalar({'ccd': {'val/mean':ccd_mean, 'val/max':ccd_max, 'val/min':ccd_min}})
         tb_datapack.add_image({'image/gt_corrs': gt_img})
         tb_datapack.add_image({'image/pred_corrs': pred_img})
         self.tb_pusher.push_to_tensorboard(tb_datapack)
@@ -214,9 +216,9 @@ class COTRDistiller(base_distiller.BaseDistiller):
 
                 t_cc = self.__class__.cycle_consistency_bidirectional(self.t_model, img, query, t_pred)
                 s_cc = self.__class__.cycle_consistency_bidirectional(self.s_model, img, query, s_pred)
+                ccd = np.linalg.norm(t_cc-s_cc)
 
-            self.push_training_data(data_pack, sb_pred['0'].tensors, tb_pred['0'].tensors, loss,
-                                    {'t_cc':t_cc, 's_cc':s_cc})
+            self.push_training_data(data_pack, sb_pred['0'].tensors, tb_pred['0'].tensors, loss, ccd )
         self.optim.step()
 
     def push_training_data(self, data_pack, s_pred, t_pred, loss, ccd):
@@ -226,7 +228,7 @@ class COTRDistiller(base_distiller.BaseDistiller):
         tb_datapack.add_histogram({'distribution/s_pred': s_pred})
         tb_datapack.add_histogram({'distribution/t_pred': t_pred})
         tb_datapack.add_scalar({'loss/train': loss})
-        tb_datapack.add_scalar({'ccd': ccd})
+        tb_datapack.add_scalar({'ccd': {'train':ccd} })
         self.tb_pusher.push_to_tensorboard(tb_datapack)
 
     def resume(self): #TODO:
