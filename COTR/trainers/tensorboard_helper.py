@@ -53,8 +53,12 @@ class TensorboardScalarHelper(TensorboardHelperBase):
     def add_data(self, tb_datapack):
         scalar_dict = tb_datapack.datapack[tb_datapack.SCALAR_NAME]
         for key, val in scalar_dict.items():
-            self.tb_writer.add_scalar(
-                key, val, global_step=tb_datapack.iteration)
+            if type(val) is dict:
+                self.tb_writer.add_scalars(
+                    key, val, global_step=tb_datapack.iteration)
+            else:
+                self.tb_writer.add_scalar(
+                    key, val, global_step=tb_datapack.iteration)
 
 
 class TensorboardHistogramHelper(TensorboardHelperBase):
