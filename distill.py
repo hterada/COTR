@@ -9,7 +9,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from COTR.models import build_model, COTR
-from COTR.utils import debug_utils, utils
+from COTR.utils import debug_utils, utils, constants
 from COTR.utils.utils import TR
 from COTR.utils.line_profiler_header import *
 
@@ -21,9 +21,7 @@ from COTR.options.options_utils import *
 
 from torchvision.models._utils import IntermediateLayerGetter
 
-
 utils.fix_randomness(0)
-
 
 @profile
 def distill_backbone(opt, t_weights_path:str, s_weights_path:str, s_layer:str):
@@ -55,10 +53,25 @@ def distill_backbone(opt, t_weights_path:str, s_weights_path:str, s_layer:str):
 
     ## modify body layer
     body = IntermediateLayerGetter(s_model.backbone[0].body, {s_layer: "0"})
-    seq_conv = torch.nn.Sequential(torch.nn.Conv2d(512, 1024, (2,2), stride=2))
+    # check body's output shape
+    REF = constants.MAX_SIZE
+    dm_in = torch.randn(1, 3, REF, REF).cuda()
+    dm_ot = body(dm_in)
+    assert len(dm_ot)==1
+    print(f"dm_ot:{dm_ot['0'].shape}" )
+    n,c,h,w = dm_ot['0'].shape
+    # Convolution により出力サイズを (N, 1024, 16, 16)にする
+    TGT = 16
+    assert h >= TGT
+    assert (h%TGT)==0
+    assert h/TGT == w/TGT
+    conv_size = int(h/TGT)
+    seq_conv = torch.nn.Sequential(torch.nn.Conv2d(c, 1024, (conv_size,conv_size), stride=conv_size))
+    # MEMO:>>
     body['resize'] = seq_conv
     body.return_layers = {"resize":"0"}
     s_model.backbone[0].body = body
+    # MEMO:<<
     print(f"s_model.backbone:{s_model.backbone[0]}")
     s_model.cuda()
     s_model.train(True)
