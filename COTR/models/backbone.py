@@ -13,7 +13,7 @@ from typing import Dict, List
 
 from .misc import NestedTensor
 
-from .position_encoding import build_position_encoding
+from .position_encoding import build_position_encoding, build_position_encoding2
 from COTR.utils import debug_utils, constants
 from COTR.utils.stopwatch import StopWatch
 from COTR.utils.utils import TR
@@ -143,15 +143,19 @@ class Joiner(nn.Sequential):
 
 
 def build_backbone(args):
-    position_embedding = build_position_encoding(args)
     if hasattr(args, 'lr_backbone'):
         train_backbone = args.lr_backbone > 0
     else:
         train_backbone = False
     TR(f"train_backbone:{train_backbone}")
-    layer = None
-    layer = args.layer
-    backbone = Backbone(args.backbone, train_backbone, False, args.dilation, layer=layer, num_channels=args.dim_feedforward)
+    return build_backbone2(
+        args.backbone, args.layer, train_backbone, args.hidden_dim, args.position_embedding, args.dilation,
+        args.dim_feedforward)
+
+def build_backbone2(backbone_name, layer, train_backbone, hidden_dim, position_embedding, dilation, dim_feedforward):
+    position_embedding = build_position_encoding2(hidden_dim, position_embedding)
+    TR(f"train_backbone:{train_backbone}")
+    backbone = Backbone(backbone_name, train_backbone, False, dilation, layer=layer, num_channels=dim_feedforward)
     model = Joiner(backbone, position_embedding)
     model.num_channels = backbone.num_channels
     return model

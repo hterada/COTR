@@ -37,6 +37,8 @@ class NerfPositionalEncoding(nn.Module):
             self.bases = [i+1 for i in range(depth)]
         elif sine_type == 'exp_sine':
             self.bases = [2**i for i in range(depth)]
+        else:
+            raise ValueError(f"Unsupported sine type:{sine_type}")
         print(f'using {sine_type} as positional encoding')
 
     @torch.no_grad()
@@ -74,11 +76,14 @@ class PositionEmbeddingSine(nn.Module):
 
 
 def build_position_encoding(args):
-    N_steps = args.hidden_dim // 2
-    if args.position_embedding in ('lin_sine', 'exp_sine'):
+    return build_position_encoding2(args.hidden_dim, args.position_embedding)
+
+def build_position_encoding2(hidden_dim, position_embedding):
+    N_steps = hidden_dim // 2
+    if position_embedding in ('lin_sine', 'exp_sine'):
         # TODO find a better way of exposing other arguments
-        position_embedding = PositionEmbeddingSine(N_steps, normalize=True, sine_type=args.position_embedding)
+        position_embedding = PositionEmbeddingSine(N_steps, normalize=True, sine_type=position_embedding)
     else:
-        raise ValueError(f"not supported {args.position_embedding}")
+        raise ValueError(f"not supported {position_embedding}")
 
     return position_embedding

@@ -1,6 +1,5 @@
 import random
-import smtplib
-import ssl
+import datetime
 from collections import namedtuple
 
 from COTR.utils import debug_utils
@@ -291,4 +290,4 @@ def TR(msg=''):
     """
     cl = code_location(inspect.currentframe().f_back)
 
-    print(f"{cl}:{msg}")
+    print(f"{datetime.datetime.now()} {cl}:{msg}")
