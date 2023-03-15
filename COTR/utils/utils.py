@@ -1,3 +1,4 @@
+from typing import Dict
 import random
 import datetime
 from collections import namedtuple
@@ -291,3 +292,26 @@ def TR(msg=''):
     cl = code_location(inspect.currentframe().f_back)
 
     print(f"{datetime.datetime.now()} {cl}:{msg}")
+
+class TRMemo:
+    cl_2_flag:Dict[str, bool] = {}
+
+    @classmethod
+    def at1st_cl(cls, cl)->bool:
+        if cl in cls.cl_2_flag:
+            return False
+        else:
+            cls.cl_2_flag[cl] = True
+            return True
+
+def TR1(msg=''):
+    """Tracer, print once
+
+    Args:
+        msg (str, optional): _description_. Defaults to ''.
+    """
+    cl = code_location(inspect.currentframe().f_back)
+    if TRMemo.at1st_cl(cl):
+        print(f"{datetime.datetime.now()} {cl}:{msg}")
+    else:
+        pass

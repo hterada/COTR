@@ -16,7 +16,7 @@ from .misc import NestedTensor
 from .position_encoding import build_position_encoding, build_position_encoding2
 from COTR.utils import debug_utils, constants
 from COTR.utils.stopwatch import StopWatch
-from COTR.utils.utils import TR
+from COTR.utils.utils import TR, TR1
 
 # from pytorch_memlab import profile
 
@@ -86,7 +86,7 @@ class BackboneBase(nn.Module):
     #@profile
     def forward(self, tensor_list: NestedTensor):
         assert tensor_list.tensors.shape[-2:] == (constants.MAX_SIZE, constants.MAX_SIZE * 2)
-        TR(f"BackboneBase: INPUT tensor_list:{type(tensor_list), tensor_list.tensors.shape}")
+        TR1(f"BackboneBase: INPUT tensor_list:{type(tensor_list), tensor_list.tensors.shape}")
         left = self.body(tensor_list.tensors[..., 0:constants.MAX_SIZE])
         right = self.body(tensor_list.tensors[..., constants.MAX_SIZE:2 * constants.MAX_SIZE])
         # TR(f"left : {[(k, v.shape) for k,v in left.items()]}")
@@ -103,7 +103,7 @@ class BackboneBase(nn.Module):
         # TR(f"BackboneBase out:{len(out)}")
         # out: layer2,0 = (24, 1024, 16, 32)
         # out: layer1,0 = (24, 256, 64, 128)
-        TR(f"BackboneBase out:{ [(k, type(v.tensors), v.tensors.shape) for k,v in out.items()] }")
+        TR1(f"BackboneBase out:{ [(k, type(v.tensors), v.tensors.shape) for k,v in out.items()] }")
         # TR(f"BackboneBase out.keys():{out.keys()}")
         return out
 
@@ -129,7 +129,7 @@ class Joiner(nn.Sequential):
         super().__init__(backbone, position_embedding)
 
     def forward(self, tensor_list: NestedTensor):
-        TR(f"Joiner: INPUT tensor_list:{tensor_list.tensors.shape}")
+        TR1(f"Joiner: INPUT tensor_list:{tensor_list.tensors.shape}")
         xs = self[0](tensor_list)
         out: List[NestedTensor] = []
         pos = []
@@ -138,7 +138,7 @@ class Joiner(nn.Sequential):
             # position encoding
             pos.append(self[1](x).to(x.tensors.dtype))
 
-        TR(f"Joiner: OUTPUT: out:{out[0].tensors.shape}, pos:{pos[0].shape}")
+        TR1(f"Joiner: OUTPUT: out:{out[0].tensors.shape}, pos:{pos[0].shape}")
         return out, pos
 
 

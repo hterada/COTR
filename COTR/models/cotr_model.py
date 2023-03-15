@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch import nn
 
 from COTR.utils import debug_utils, constants, utils
-from COTR.utils.utils import TR
+from COTR.utils.utils import TR, TR1
 
 from .misc import (NestedTensor, nested_tensor_from_tensor_list)
 from .backbone import build_backbone
@@ -32,9 +32,9 @@ class COTR(nn.Module):
 
     # @profile
     def forward(self, samples: Union[torch.Tensor, NestedTensor], queries):
-        TR(f"samples:{type(samples)}")
+        TR1(f"samples:{type(samples)}")
         if type(samples)==torch.Tensor:
-            TR(f"COTR INPUT: samples:{samples.shape} queries:{queries.shape}")
+            TR1(f"COTR INPUT: samples:{samples.shape} queries:{queries.shape}")
         if isinstance(samples, (list, torch.Tensor)):
             samples = nested_tensor_from_tensor_list(samples)
 
@@ -48,20 +48,20 @@ class COTR(nn.Module):
         queries = queries.reshape(-1, 2)
 
         with StopWatch("NerfPositionalEncoding") as sw:
-            TR(f"BEFORE P.E. queries:{queries.shape}")
+            TR1(f"BEFORE P.E. queries:{queries.shape}")
             # queries.shape = (*,2)
             queries = self.query_proj(queries).reshape(_b, _q, -1)
-            TR(f"AFTER  P.E. queries:{queries.shape}")
+            TR1(f"AFTER  P.E. queries:{queries.shape}")
             # queries.shape = (1, *, 256)
         queries = queries.permute(1, 0, 2)
-        TR(f"AFTER2  P.E. queries:{queries.shape}")
+        TR1(f"AFTER2  P.E. queries:{queries.shape}")
         # queries.shape = (*, 1, 256)
 
         with StopWatch("Transformaer") as sw:
             hs = self.transformer(self.input_proj(src), mask, queries, pos[-1])[0]
         outputs_corr = self.corr_embed(hs)
         out = {'pred_corrs': outputs_corr[-1]}
-        TR(f"COTR OUTPUT: out:{outputs_corr[-1].shape}")
+        TR1(f"COTR OUTPUT: out:{outputs_corr[-1].shape}")
         return out
 
 
