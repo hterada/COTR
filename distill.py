@@ -28,6 +28,7 @@ def distill_backbone(opt, t_weights_path:str, s_weights_path:str, s_layer:str):
     # print env info
     pprint.pprint(dict(os.environ), width=1)
     result = subprocess.Popen(["nvidia-smi"], stdout=subprocess.PIPE)
+    assert result.stdout is not None
     print(result.stdout.read().decode())
     device = torch.cuda.current_device()
     print(f'can see {torch.cuda.device_count()} gpus')
@@ -52,15 +53,18 @@ def distill_backbone(opt, t_weights_path:str, s_weights_path:str, s_layer:str):
     utils.safe_load_weights(s_model, weights)
 
     ## modify body layer
-    body = IntermediateLayerGetter(s_model.backbone[0].body, {s_layer: "0"})
-    # check body's output shape
+    body = IntermediateLayerGetter(s_model.backbone[0].body, {s_layer: "0"}) #new_name = "0"
+    print(f"s_body0:{body}")
+    print(f"s_body0.return_layers:{body.return_layers}")
+
+    ## check body's output shape
     REF = constants.MAX_SIZE
     dm_in = torch.randn(1, 3, REF, REF).cuda()
     dm_ot = body(dm_in)
     assert len(dm_ot)==1
     print(f"dm_ot:{dm_ot['0'].shape}" )
     n,c,h,w = dm_ot['0'].shape
-    # Convolution により出力サイズを (N, 1024, 16, 16)にする
+    ## Convolution により出力サイズを (N, 1024, 16, 16)にする
     TGT = 16
     assert h >= TGT
     assert (h%TGT)==0

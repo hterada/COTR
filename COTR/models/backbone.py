@@ -101,7 +101,9 @@ class BackboneBase(nn.Module):
             mask = F.interpolate(m[None].float(), size=x.shape[-2:]).to(torch.bool)[0]
             out[name] = NestedTensor(x, mask)
         # TR(f"BackboneBase out:{len(out)}")
-        # TR(f"BackboneBase out:{ [(k, type(v.tensors), v.tensors.shape) for k,v in out.items()] }") # (24, 1024, 16, 32)
+        # out: layer2,0 = (24, 1024, 16, 32)
+        # out: layer1,0 = (24, 256, 64, 128)
+        TR(f"BackboneBase out:{ [(k, type(v.tensors), v.tensors.shape) for k,v in out.items()] }")
         # TR(f"BackboneBase out.keys():{out.keys()}")
         return out
 

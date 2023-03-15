@@ -10,4 +10,7 @@ debug_out/
 .ipynb_checkpoints/
 d_tb_out/
 my_out/
+train_out/
 out/
+d_tb_out__s_layer1_0_buggy/
+d_tb_out__s_layer2_0/
