@@ -14,7 +14,7 @@ from PIL import Image, ImageDraw
 
 from COTR.models import COTR
 from COTR.utils import utils, debug_utils, constants
-from COTR.utils.utils import TR
+from COTR.utils.utils import TR,TR1
 from COTR.utils.line_profiler_header import *
 from COTR.trainers import tensorboard_helper, base_distiller
 from COTR.projector import pcd_projector
@@ -162,7 +162,6 @@ class COTRDistiller(base_distiller.BaseDistiller):
     def train_batch(self, data_pack):
         '''train for one batch of data
         '''
-        TR()
         assert self.t_backbone.training == False
         img = data_pack['image'].cuda()
         b,c,h,w = img.shape
