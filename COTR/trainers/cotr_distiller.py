@@ -87,7 +87,8 @@ class COTRDistiller(base_distiller.BaseDistiller):
         self.s_backbone.eval()
 
         val_loss_list = []
-        cc_list = []
+        t_cc_list = []
+        s_cc_list = []
         for batch_idx, data_pack in tqdm.tqdm(
                 enumerate(self.val_loader), total=len(self.val_loader),
                 desc='Valid iteration=%d' % self.iteration, ncols=80,
@@ -95,13 +96,13 @@ class COTRDistiller(base_distiller.BaseDistiller):
             # validate a batch
             loss_data, pred, t_cc, s_cc = self.validate_batch(data_pack)
             val_loss_list.append(loss_data)
-            cc_list.append( np.linalg.norm(t_cc-s_cc) )
+            t_cc_list.append(t_cc)
+            s_cc_list.append(s_cc)
 
         mean_loss = np.array(val_loss_list).mean()
-        mean_cc = np.array(cc_list).mean()
-        max_cc = np.array(cc_list).max()
-        min_cc = np.array(cc_list).min()
-        validation_data = {'val_loss': mean_loss, 'pred': pred, 'ccd_mean':mean_cc, 'ccd_max':max_cc, 'ccd_min':min_cc}
+        mean_t_cc = np.array(t_cc_list).mean()
+        mean_s_cc = np.array(s_cc_list).mean()
+        validation_data = {'val_loss': mean_loss, 'pred': pred, 't_cc':mean_t_cc, 's_cc':mean_s_cc}
         self.push_validation_data(data_pack, validation_data)
         self.save_model()
 
@@ -110,9 +111,8 @@ class COTRDistiller(base_distiller.BaseDistiller):
 
     def push_validation_data(self, data_pack, validation_data):
         val_loss = validation_data['val_loss']
-        ccd_mean = validation_data['ccd_mean']
-        ccd_max = validation_data['ccd_max']
-        ccd_min = validation_data['ccd_min']
+        t_cc = validation_data['t_cc']
+        s_cc = validation_data['s_cc']
         pred_corrs = np.concatenate([data_pack['queries'].numpy(), validation_data['pred'].cpu().numpy()], axis=-1)
         pred_corrs = self.draw_corrs(data_pack['image'], pred_corrs)
         gt_corrs = np.concatenate([data_pack['queries'].numpy(), data_pack['targets'].cpu().numpy()], axis=-1)
@@ -124,7 +124,7 @@ class COTRDistiller(base_distiller.BaseDistiller):
         tb_datapack.set_training(False)
         tb_datapack.set_iteration(self.iteration)
         tb_datapack.add_scalar({'loss/val': val_loss})
-        tb_datapack.add_scalar({'ccd': {'val/mean':ccd_mean, 'val/max':ccd_max, 'val/min':ccd_min}})
+        tb_datapack.add_scalar({'cc': {'val/teacher':t_cc, 'val/student':s_cc}})
         tb_datapack.add_image({'image/gt_corrs': gt_img})
         tb_datapack.add_image({'image/pred_corrs': pred_img})
         self.tb_pusher.push_to_tensorboard(tb_datapack)
@@ -215,22 +215,22 @@ class COTRDistiller(base_distiller.BaseDistiller):
 
                 t_cc = self.__class__.cycle_consistency_bidirectional(self.t_model, img, query, t_pred)
                 s_cc = self.__class__.cycle_consistency_bidirectional(self.s_model, img, query, s_pred)
-                ccd = np.linalg.norm(t_cc-s_cc)
+                # ccd = np.linalg.norm(t_cc-s_cc)
 
-            self.push_training_data(data_pack, sb_pred['0'].tensors, tb_pred['0'].tensors, loss, ccd )
+            self.push_training_data(tb_pred['0'].tensors, sb_pred['0'].tensors, loss, t_cc, s_cc )
         self.optim.step()
 
-    def push_training_data(self, data_pack, s_pred, t_pred, loss, ccd):
+    def push_training_data(self, t_pred, s_pred, loss, t_cc, s_cc):
         tb_datapack = tensorboard_helper.TensorboardDatapack()
         tb_datapack.set_training(True)
         tb_datapack.set_iteration(self.iteration)
         tb_datapack.add_histogram({'distribution/s_pred': s_pred})
         tb_datapack.add_histogram({'distribution/t_pred': t_pred})
         tb_datapack.add_scalar({'loss/train': loss})
-        tb_datapack.add_scalar({'ccd': {'train':ccd} })
+        tb_datapack.add_scalar({'cc': {'train/teacher':t_cc, 'train/student':s_cc} })
         self.tb_pusher.push_to_tensorboard(tb_datapack)
 
-    def resume(self): #TODO:
+    def resume(self, s_weights_path:str): #TODO:
         '''resume training:
         resume from the recorded epoch, iteration, and saved weights.
         resume from the model with the same name.
@@ -238,19 +238,17 @@ class COTRDistiller(base_distiller.BaseDistiller):
         Arguments:
             opt {[type]} -- [description]
         '''
-        if hasattr(self.opt, 'load_weights'):
-            assert self.opt.load_weights is None or self.opt.load_weights == False
+        TR1('resume distill')
         # 1. load check point
-        checkpoint_path = os.path.join(self.opt.out, 'checkpoint.pth.tar')
-        if os.path.isfile(checkpoint_path):
-            checkpoint = torch.load(checkpoint_path)
+        if os.path.isfile(s_weights_path):
+            checkpoint = torch.load(s_weights_path)
         else:
             raise FileNotFoundError(
-                'model check point cannnot found: {0}'.format(checkpoint_path))
+                f'model check point cannnot found: {s_weights_path}')
         # 2. load data
         self.epoch = checkpoint['epoch']
         self.iteration = checkpoint['iteration']
-        self.load_pretrained_weights()
+        # self.load_pretrained_weights()
         self.optim.load_state_dict(checkpoint['optim_state_dict'])
 
     def load_pretrained_weights(self, t_weights_path:str, s_weights_path:Optional[str]):

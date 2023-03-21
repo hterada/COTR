@@ -49,13 +49,16 @@ class BaseDistiller(abc.ABC):
         self.valid_iter = valid_iter
         self.tb_pusher = tensorboard_helper.TensorboardPusher.create(tb_out_dir)
         self.push_opt_to_tb(opt_str)
+        # resume
         self.need_resume = resume
         if self.need_resume:
-            self.resume()
+            assert s_weights_path is not None
+            self.resume( s_weights_path )
+
         self.t_weights_path = t_weights_path
         self.s_weights_path = s_weights_path
 
-        self.load_pretrained_weights(self.t_weights_path, self.s_weights_path)
+        # self.load_pretrained_weights(self.t_weights_path, self.s_weights_path)
 
     def push_opt_to_tb(self, opt_str:str):
         # opt_str = options_utils.opt_to_string(self.opt)
@@ -148,5 +151,5 @@ class BaseDistiller(abc.ABC):
                 break
 
     @abc.abstractmethod
-    def resume(self):
+    def resume(self, s_weights_path:str):
         pass

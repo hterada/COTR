@@ -44,28 +44,27 @@ def distill_backbone(opt, t_weights_path:str, s_weights_path:str, s_layer:str):
 
     torch.cuda.empty_cache()
 
+    ##########################
     # setup teacher model
     TR1()
     t_model:COTR = build_model(opt)
-    # for name, param in t_model.named_parameters():
-    #     print(f"t0 param:{name}:{param.shape}:{param.requires_grad}")
     t_model = t_model.cuda()
+
+    ## load teacher weights
     weights = torch.load(t_weights_path, map_location='cpu')['model_state_dict']
     utils.safe_load_weights(t_model, weights)
 
     # eval(): switch to inference mode
     t_model = t_model.eval()
 
-    # 教師モデルは勾配計算させない。
+    ## 教師モデルは勾配計算させない。
     for param in t_model.parameters():
         param.requires_grad = False
-    print_mem_capa(t_model, "t_model")
 
+    ##########################
     # setup student model
     s_model:COTR = build_model(opt)
     s_model = s_model.cuda()
-    weights = torch.load(s_weights_path, map_location='cpu')['model_state_dict']
-    utils.safe_load_weights(s_model, weights)
 
     ## modify body layer
     body = IntermediateLayerGetter(s_model.backbone[0].body, {s_layer: "0"}) #new_name = "0"
@@ -79,6 +78,7 @@ def distill_backbone(opt, t_weights_path:str, s_weights_path:str, s_layer:str):
     assert len(dm_ot)==1
     print(f"dm_ot:{dm_ot['0'].shape}" )
     n,c,h,w = dm_ot['0'].shape
+
     ## Convolution により出力サイズを (N, 1024, 16, 16)にする
     TGT = 16
     assert h >= TGT
@@ -91,6 +91,11 @@ def distill_backbone(opt, t_weights_path:str, s_weights_path:str, s_layer:str):
     body.return_layers = {"resize":"0"}
     s_model.backbone[0].body = body
     # MEMO:<<
+    s_model = s_model.cuda()
+
+    ## load student weights
+    weights = torch.load(s_weights_path, map_location='cpu')['model_state_dict']
+    utils.safe_load_weights(s_model, weights)
 
     # backbone 以外の学習を止める
     for module in [s_model.transformer, s_model.corr_embed, s_model.query_proj, s_model.input_proj]:
@@ -101,8 +106,9 @@ def distill_backbone(opt, t_weights_path:str, s_weights_path:str, s_layer:str):
         param.requires_grad = True
 
     #
-    for name, param in s_model.named_parameters():
-        print(f"s_model.{name} {param.requires_grad}")
+    # for name, param in s_model.named_parameters():
+    #     print(f"s_model.{name} {param.requires_grad}")
+    print_mem_capa(t_model, "t_model")
     print_mem_capa(s_model, "s_model")
 
     # print(f"s_model.backbone:{s_model.backbone[0]}")
@@ -146,7 +152,7 @@ def distill_backbone(opt, t_weights_path:str, s_weights_path:str, s_layer:str):
 
 
 if __name__ == "__main__":
-    TR()
+    TR1()
     parser = argparse.ArgumentParser()
 
     set_general_arguments(parser)
@@ -242,9 +248,9 @@ if __name__ == "__main__":
 
     # for
 
-    TR()
+    TR1()
     opt.scenes_name_list = build_scenes_name_list_from_opt(opt)
-    TR()
+    TR1()
 
     if opt.confirm:
         confirm_opt(opt)
@@ -252,5 +258,5 @@ if __name__ == "__main__":
         print_opt(opt)
 
     save_opt(opt)
-    TR()
+    TR1()
     distill_backbone(opt, t_weights_path, s_weights_path, opt.s_layer)
