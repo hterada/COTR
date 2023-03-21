@@ -18,7 +18,7 @@
 python distill.py --load_t_weights="out/default" --load_s_weights="out/default" \
  --layer=layer3 --s_layer=layer1 \
  --scene_file sample_data/jsons/debug_megadepth.json \
- --suffix=distill_2_debug \
+ --suffix=distill_3_debug \
  --info_level=rgbd --use_ram=no --use_cc=no --batch_size=24 --learning_rate=1e-4 --max_iter=100000 --workers=8 --position_embedding=lin_sine \
  --confirm=no --dataset_name=megadepth_sushi \
  --valid_iter=50 --enable_zoom=no --crop_cam=crop_center_and_resize --out_dir=./my_out --resume=no --cc_resume=no

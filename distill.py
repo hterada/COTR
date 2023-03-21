@@ -6,11 +6,12 @@ import copy
 
 import numpy as np
 import torch
+from torch import nn
 from torch.utils.data import DataLoader
 
 from COTR.models import build_model, COTR
 from COTR.utils import debug_utils, utils, constants
-from COTR.utils.utils import TR
+from COTR.utils.utils import TR, TR1
 from COTR.utils.line_profiler_header import *
 
 from COTR.datasets import cotr_dataset
@@ -22,6 +23,13 @@ from COTR.options.options_utils import *
 from torchvision.models._utils import IntermediateLayerGetter
 
 utils.fix_randomness(0)
+
+def print_mem_capa(model:nn.Module, name:str):
+    mem_params = sum([param.nelement()*param.element_size() for param in model.parameters()])
+    mem_bufs = sum([buf.nelement()*buf.element_size() for buf in model.buffers()])
+    print(f"{name}.mem_params = {mem_params/1024}[KB]")
+    print(f"{name}.mem_bufs = {mem_bufs/1024}[KB]")
+
 
 @profile
 def distill_backbone(opt, t_weights_path:str, s_weights_path:str, s_layer:str):
@@ -37,14 +45,21 @@ def distill_backbone(opt, t_weights_path:str, s_weights_path:str, s_layer:str):
     torch.cuda.empty_cache()
 
     # setup teacher model
-    TR()
+    TR1()
     t_model:COTR = build_model(opt)
+    # for name, param in t_model.named_parameters():
+    #     print(f"t0 param:{name}:{param.shape}:{param.requires_grad}")
     t_model = t_model.cuda()
     weights = torch.load(t_weights_path, map_location='cpu')['model_state_dict']
     utils.safe_load_weights(t_model, weights)
+
     # eval(): switch to inference mode
     t_model = t_model.eval()
-    print(f"t_model.backbone:{type(t_model.backbone), t_model.backbone[0]}")
+
+    # 教師モデルは勾配計算させない。
+    for param in t_model.parameters():
+        param.requires_grad = False
+    print_mem_capa(t_model, "t_model")
 
     # setup student model
     s_model:COTR = build_model(opt)
@@ -54,7 +69,7 @@ def distill_backbone(opt, t_weights_path:str, s_weights_path:str, s_layer:str):
 
     ## modify body layer
     body = IntermediateLayerGetter(s_model.backbone[0].body, {s_layer: "0"}) #new_name = "0"
-    print(f"s_body0:{body}")
+    # print(f"s_body0:{body}")
     print(f"s_body0.return_layers:{body.return_layers}")
 
     ## check body's output shape
@@ -76,7 +91,21 @@ def distill_backbone(opt, t_weights_path:str, s_weights_path:str, s_layer:str):
     body.return_layers = {"resize":"0"}
     s_model.backbone[0].body = body
     # MEMO:<<
-    print(f"s_model.backbone:{s_model.backbone[0]}")
+
+    # backbone 以外の学習を止める
+    for module in [s_model.transformer, s_model.corr_embed, s_model.query_proj, s_model.input_proj]:
+        for param in module.parameters():
+            param.requires_grad = False
+    # backbone は学習させる
+    for param in s_model.backbone.parameters():
+        param.requires_grad = True
+
+    #
+    for name, param in s_model.named_parameters():
+        print(f"s_model.{name} {param.requires_grad}")
+    print_mem_capa(s_model, "s_model")
+
+    # print(f"s_model.backbone:{s_model.backbone[0]}")
     s_model.cuda()
     s_model.train(True)
 
