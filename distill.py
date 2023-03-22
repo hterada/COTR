@@ -192,7 +192,7 @@ if __name__ == "__main__":
     parser.add_argument('--valid_iter', type=int,
                         default=1000, help='iterval of validation')
     parser.add_argument('--resume', type=str2bool, default=False,
-                        help='resume training with same model name')
+                        help='resume distilling with `load_s_weights` model name')
     parser.add_argument('--cc_resume', type=str2bool, default=False,
                         help='resume from last run if possible')
     parser.add_argument('--need_rotation', type=str2bool, default=False,
@@ -223,30 +223,31 @@ if __name__ == "__main__":
     opt.out = os.path.join(opt.out_dir, opt.name)
     opt.tb_out = os.path.join(opt.tb_dir, opt.name)
 
-    if opt.cc_resume:
-        # さっきの続きから。
-        if os.path.isfile(os.path.join(opt.out, 'checkpoint.pth.tar')):
-            print('resuming from last run')
-            opt.load_s_weights = None
-            opt.resume = True
-        else:
-            opt.resume = False
-    assert (bool(opt.load_s_weights) and opt.resume) == False
-    # teacher
+    s_weights_path = None
     t_weights_path = None
+
+    if opt.resume: # resume のほうが cc_resume より優先
+        print('resuming from specified model')
+        s_weights_path = os.path.join(opt.load_s_weights, 'checkpoint.pth.tar')
+    else:
+        if opt.cc_resume:
+            # さっきの続きから。
+            if os.path.isfile(os.path.join(opt.out, 'checkpoint.pth.tar')):
+                print('resuming from last run')
+                s_weights_path = os.path.join(opt.out, 'checkpoint.pth.tar')
+                opt.load_s_weights = None
+                opt.resume = True
+            else:
+                opt.resume = False
+    print(f"s_weights_path={s_weights_path}")
+
+    # teacher
     if opt.load_t_weights:
         t_weights_path = os.path.join(opt.load_t_weights, 'checkpoint.pth.tar')
 
     # student
-    s_weights_path = None
     if opt.load_s_weights:
         s_weights_path = os.path.join(opt.load_s_weights, 'checkpoint.pth.tar')
-
-    # resume
-    if opt.resume:
-        s_weights_path = os.path.join(opt.out, 'checkpoint.pth.tar')
-
-    # for
 
     TR1()
     opt.scenes_name_list = build_scenes_name_list_from_opt(opt)

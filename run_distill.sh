@@ -14,11 +14,22 @@
 # # student : layer2
 # python distill.py --load_t_weights="out/default" --load_s_weights="out/default" --scene_file sample_data/jsons/200_megadepth.json --info_level=rgbd --use_ram=no --use_cc=no --batch_size=24 --learning_rate=1e-4 --max_iter=100000 --workers=8 --cycle_consis=yes --bidirectional=yes --position_embedding=lin_sine --layer=layer3 --s_layer=layer2 --confirm=no --dataset_name=megadepth_sushi --suffix=distill_200 --valid_iter=50 --enable_zoom=no --crop_cam=crop_center_and_resize --out_dir=./my_out --resume=no --cc_resume=no
 
-# student : layer1
-python distill.py --load_t_weights="out/default" --load_s_weights="out/default" \
+# # student : layer1
+# python distill.py --load_t_weights="out/default" --load_s_weights="out/default" \
+#  --layer=layer3 --s_layer=layer1 \
+#  --scene_file sample_data/jsons/debug_megadepth.json \
+#  --suffix=distill_3_debug \
+#  --info_level=rgbd --use_ram=no --use_cc=no --batch_size=24 --learning_rate=1e-4 --max_iter=100000 --workers=8 --position_embedding=lin_sine \
+#  --confirm=no --dataset_name=megadepth_sushi \
+#  --valid_iter=50 --enable_zoom=no --crop_cam=crop_center_and_resize --out_dir=./my_out --resume=no --cc_resume=yes
+
+# student : layer1, distill_4_full
+python distill.py --load_t_weights="out/default" \
+--load_s_weights="my_out/model:cotr_distilled_resnet50_layer1_dset:megadepth_sushi_bs:24_lr:0.0001_suffix:distill_3_debug" \
  --layer=layer3 --s_layer=layer1 \
- --scene_file sample_data/jsons/debug_megadepth.json \
- --suffix=distill_3_debug \
+ --scene_file sample_data/jsons/200_megadepth.json \
+ --suffix=distill_4_full \
  --info_level=rgbd --use_ram=no --use_cc=no --batch_size=24 --learning_rate=1e-4 --max_iter=100000 --workers=8 --position_embedding=lin_sine \
  --confirm=no --dataset_name=megadepth_sushi \
- --valid_iter=50 --enable_zoom=no --crop_cam=crop_center_and_resize --out_dir=./my_out --resume=no --cc_resume=yes
+ --valid_iter=50 --enable_zoom=no --crop_cam=crop_center_and_resize --out_dir=./my_out \
+ --resume=yes --cc_resume=no
