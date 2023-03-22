@@ -140,14 +140,18 @@ class BaseDistiller(abc.ABC):
         '''entrance of the whole training process
         '''
         max_epoch = int(math.ceil(1. * self.max_iter / len(self.train_loader)))
+        TR(f"len(train_loader)={len(self.train_loader)}")
+        TR(f"max_epoch={max_epoch}, self.epoch={self.epoch}")
         for epoch in tqdm.trange(self.epoch,
                                  max_epoch,
                                  desc='Train',
                                  ncols=80):
+            TR(f"epoch={epoch}")
             self.epoch = epoch
             time.sleep(2)  # Prevent possible deadlock during epoch transition
             self.train_epoch()
             if self.iteration >= self.max_iter:
+                print(f"break on over max_iter:{self.iteration}")
                 break
 
     @abc.abstractmethod
