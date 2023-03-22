@@ -1,9 +1,15 @@
+#syntax = docker/dockerfile:1.2
 # for running the demo
 
 FROM nvidia/cuda:12.0.0-devel-ubuntu22.04
 
+ENV PIP_CACHE_DIR=/var/cache/buildkit/pip
+RUN mkdir -p $PIP_CACHE_DIR
+RUN rm -f /etc/apt/apt.conf.d/docker-clean
+RUN --mount=type=cache,target=/var/cache/apt
+
 RUN apt-get update -y
-RUN apt-get install -y wget git
+RUN apt-get install -y wget git --no-install-recommends
 
 # Miniconda
 RUN mkdir -p install/miniconda
@@ -33,6 +39,10 @@ RUN conda install -n cotr_env -c conda-forge torchinfo tensorboardx -y
 RUN conda run -n cotr_env pip install jupyterlab_tabnine
 RUN conda install -n cotr_env -c conda-forge line_profiler -y
 
+# timezone
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get install -y tzdata
+ENV TZ='Asia/Tokyo'
 
 VOLUME ["/COTR"]
 WORKDIR /COTR
