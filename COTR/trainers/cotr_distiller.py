@@ -9,6 +9,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import torchvision.utils as vutils
+from torchinfo import summary
 from PIL import Image, ImageDraw
 
 
@@ -20,21 +21,21 @@ from COTR.trainers import tensorboard_helper, base_distiller
 from COTR.projector import pcd_projector
 from COTR.models.misc import NestedTensor
 
-
 class COTRDistiller(base_distiller.BaseDistiller):
     def __init__(self, t_model:COTR, s_model:COTR,
                 optimizer, criterion,
                 train_loader, val_loader,
-                use_cuda:bool, out_dir:str, tb_out_dir:str, max_iter:int, valid_iter:int,
+                use_cuda:bool, device:torch.device, out_dir:str, tb_out_dir:str, max_iter:int, valid_iter:int,
                 opt_str:str,
                 resume:bool,
                 t_weights_path:str, s_weights_path:Optional[str]=None):
 
         super().__init__(t_model, s_model, optimizer, criterion,
-                         train_loader, val_loader, use_cuda, out_dir, tb_out_dir,
+                         train_loader, val_loader, use_cuda, device, out_dir, tb_out_dir,
                          max_iter, valid_iter,
                          opt_str,
                          resume, t_weights_path, s_weights_path)
+        self.summary_done = False
 
     def get_t_backbone(self)->Optional[nn.Module]:
         return self.t_model.backbone[0]
@@ -53,10 +54,10 @@ class COTRDistiller(base_distiller.BaseDistiller):
         assert self.s_backbone.training is False
 
         with torch.no_grad():
-            img = data_pack['image'].cuda()
+            img = data_pack['image'].cuda(self.device)
             b,c,h,w = img.shape
-            query = data_pack['queries'].cuda()
-            # target = data_pack['targets'].cuda()
+            query = data_pack['queries'].cuda(self.device)
+            # target = data_pack['targets'].cuda(self.device)
             s_pred = self.s_model(img, query)['pred_corrs']
             t_pred = self.t_model(img, query)['pred_corrs']
 
@@ -162,13 +163,14 @@ class COTRDistiller(base_distiller.BaseDistiller):
     def train_batch(self, data_pack):
         '''train for one batch of data
         '''
+        TR()
         assert self.t_backbone.training == False
-        img = data_pack['image'].cuda()
+        img = data_pack['image'].cuda(self.device)
         b,c,h,w = img.shape
         # img.shape = (24, 3, 256, 512)
-        print(f"img:{type(img), img.shape}")
-        # query = data_pack['queries'].cuda()
-        # target = data_pack['targets'].cuda()
+        TR(f"img:{type(img), img.shape}")
+        # query = data_pack['queries'].cuda(self.device)
+        # target = data_pack['targets'].cuda(self.device)
 
         self.optim.zero_grad()
         mask = torch.ones((b,h,w), dtype=torch.bool, device=img.device)
@@ -209,12 +211,23 @@ class COTRDistiller(base_distiller.BaseDistiller):
             # log
             ## cycle consistency
             with torch.no_grad():
-                query = data_pack['queries'].cuda()
+                query = data_pack['queries'].cuda(self.device)
+                TR(f"query:{type(query), query.shape}")
                 s_pred = self.s_model(img, query)['pred_corrs']
                 t_pred = self.t_model(img, query)['pred_corrs']
 
                 t_cc = self.__class__.cycle_consistency_bidirectional(self.t_model, img, query, t_pred)
                 s_cc = self.__class__.cycle_consistency_bidirectional(self.s_model, img, query, s_pred)
+
+                # summary
+                if not self.summary_done:
+                    TR1()
+                    self.summary_done = True
+                    TR("summary t_model")
+                    summary(self.t_model, input_data=[img[:1,...], query[:1,...]])
+                    TR("summary s_model")
+                    summary(self.s_model, input_data=[img[:1,...], query[:1,...]])
+
                 # ccd = np.linalg.norm(t_cc-s_cc)
 
             self.push_training_data(tb_pred['0'].tensors, sb_pred['0'].tensors, loss, t_cc, s_cc )

@@ -32,15 +32,16 @@ def print_mem_capa(model:nn.Module, name:str):
 
 
 @profile
-def distill_backbone(opt, t_weights_path:str, s_weights_path:str, s_layer:str):
+def distill_backbone(opt, gpuno:int, t_weights_path:str, s_weights_path:str, s_layer:str):
     # print env info
     pprint.pprint(dict(os.environ), width=1)
     result = subprocess.Popen(["nvidia-smi"], stdout=subprocess.PIPE)
     assert result.stdout is not None
     print(result.stdout.read().decode())
-    device = torch.cuda.current_device()
+    device = torch.device(f"cuda:{gpuno}")
     print(f'can see {torch.cuda.device_count()} gpus')
-    print(f'current using gpu at {device} -- {torch.cuda.get_device_name(device)}')
+    print(f'using gpu at "{device}" -- "{torch.cuda.get_device_name(device)}"')
+
 
     torch.cuda.empty_cache()
 
@@ -48,7 +49,7 @@ def distill_backbone(opt, t_weights_path:str, s_weights_path:str, s_layer:str):
     # setup teacher model
     TR1()
     t_model:COTR = build_model(opt)
-    t_model = t_model.cuda()
+    t_model = t_model.cuda(device)
 
     ## load teacher weights
     weights = torch.load(t_weights_path, map_location='cpu')['model_state_dict']
@@ -64,7 +65,7 @@ def distill_backbone(opt, t_weights_path:str, s_weights_path:str, s_layer:str):
     ##########################
     # setup student model
     s_model:COTR = build_model(opt)
-    s_model = s_model.cuda()
+    s_model = s_model.cuda(device)
 
     ## modify body layer
     body = IntermediateLayerGetter(s_model.backbone[0].body, {s_layer: "0"}) #new_name = "0"
@@ -73,10 +74,10 @@ def distill_backbone(opt, t_weights_path:str, s_weights_path:str, s_layer:str):
 
     ## check body's output shape
     REF = constants.MAX_SIZE
-    dm_in = torch.randn(1, 3, REF, REF).cuda()
+    dm_in = torch.randn(1, 3, REF, REF).cuda(device)
     dm_ot = body(dm_in)
     assert len(dm_ot)==1
-    print(f"dm_ot:{dm_ot['0'].shape}" )
+    TR(f"dm_ot:{dm_ot['0'].shape}" )
     n,c,h,w = dm_ot['0'].shape
 
     ## Convolution により出力サイズを (N, 1024, 16, 16)にする
@@ -85,13 +86,15 @@ def distill_backbone(opt, t_weights_path:str, s_weights_path:str, s_layer:str):
     assert (h%TGT)==0
     assert h/TGT == w/TGT
     conv_size = int(h/TGT)
-    seq_conv = torch.nn.Sequential(torch.nn.Conv2d(c, 1024, (conv_size,conv_size), stride=conv_size))
+    conv = torch.nn.Conv2d(c, 1024, (conv_size,conv_size), stride=conv_size)
+    TR(f"student additional conv:{conv}")
+    seq_conv = torch.nn.Sequential(conv)
     # MEMO:>>
     body['resize'] = seq_conv
     body.return_layers = {"resize":"0"}
     s_model.backbone[0].body = body
     # MEMO:<<
-    s_model = s_model.cuda()
+    s_model = s_model.cuda(device)
 
     ## load student weights
     weights = torch.load(s_weights_path, map_location='cpu')['model_state_dict']
@@ -112,7 +115,7 @@ def distill_backbone(opt, t_weights_path:str, s_weights_path:str, s_layer:str):
     print_mem_capa(s_model, "s_model")
 
     # print(f"s_model.backbone:{s_model.backbone[0]}")
-    s_model.cuda()
+    s_model.cuda(device)
     s_model.train(True)
 
     #
@@ -144,7 +147,7 @@ def distill_backbone(opt, t_weights_path:str, s_weights_path:str, s_layer:str):
     # distiller
     distiller = COTRDistiller(t_model, s_model,
                               optim, None, train_loader, val_loader,
-                              opt.use_cuda, opt.out, opt.tb_out, opt.max_iter, opt.valid_iter,
+                              opt.use_cuda, device, opt.out, opt.tb_out, opt.max_iter, opt.valid_iter,
                               opt_str,
                               opt.resume, t_weights_path, s_weights_path
                               )
@@ -208,6 +211,7 @@ if __name__ == "__main__":
                         help='load a pretrained set of weights for student, you need to provide the model id')
 
     parser.add_argument('--suffix', type=str, default='', help='model suffix')
+    parser.add_argument('--gpuno', type=int, default=0, help='specify gpu number:0,1,...')
 
     opt = parser.parse_args()
     opt.command = ' '.join(sys.argv)
@@ -260,4 +264,4 @@ if __name__ == "__main__":
 
     save_opt(opt)
     TR1()
-    distill_backbone(opt, t_weights_path, s_weights_path, opt.s_layer)
+    distill_backbone(opt, opt.gpuno, t_weights_path, s_weights_path, opt.s_layer)

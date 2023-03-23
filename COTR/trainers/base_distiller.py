@@ -5,6 +5,7 @@ import time
 from typing import Optional
 
 import tqdm
+import torch
 import torch.nn as nn
 import tensorboardX
 
@@ -24,12 +25,13 @@ class BaseDistiller(abc.ABC):
     def __init__(self, t_model:COTR, s_model:COTR,
                 optimizer, criterion,
                 train_loader, val_loader,
-                use_cuda:bool, out_dir:str, tb_out_dir:str, max_iter:int, valid_iter:int,
+                use_cuda:bool, device:torch.device, out_dir:str, tb_out_dir:str, max_iter:int, valid_iter:int,
                 opt_str:str,
                 resume:bool,
                 t_weights_path:str,
                 s_weights_path:Optional[str]=None):
         self.use_cuda = use_cuda
+        self.device = device
         self.t_model = t_model
         self.s_model = s_model
         # backbone
