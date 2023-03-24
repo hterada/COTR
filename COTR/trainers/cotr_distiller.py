@@ -224,9 +224,9 @@ class COTRDistiller(base_distiller.BaseDistiller):
                     TR1()
                     self.summary_done = True
                     TR("summary t_model")
-                    summary(self.t_model, input_data=[img[:1,...], query[:1,...]])
+                    summary(self.t_model, input_data=[img[:1,...], query[:1,...]], device=self.device)
                     TR("summary s_model")
-                    summary(self.s_model, input_data=[img[:1,...], query[:1,...]])
+                    summary(self.s_model, input_data=[img[:1,...], query[:1,...]], device=self.device)
 
                 # ccd = np.linalg.norm(t_cc-s_cc)
 
