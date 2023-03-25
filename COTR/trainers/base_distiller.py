@@ -97,7 +97,7 @@ class BaseDistiller(abc.ABC):
         pass
 
     @abc.abstractmethod
-    def validate(self):
+    def validate(self, symbol:str):
         pass
 
     @abc.abstractmethod
@@ -106,19 +106,20 @@ class BaseDistiller(abc.ABC):
         '''
         pass
 
-    def train_epoch(self):
+    def train_epoch(self, symbol:str):
         '''train for one epoch
         one epoch is iterating the whole training dataset once
         '''
         TR("train_epoch")
         # training mode
+        assert self.s_backbone is not None
         self.s_backbone.train()
         print(f"trail_loader len:{len(self.train_loader)}")
         for batch_idx, data_pack in tqdm.tqdm(enumerate(self.train_loader),
                                               initial=self.iteration % len(
                                                   self.train_loader),
                                               total=len(self.train_loader),
-                                              desc='Train epoch={0}'.format(
+                                              desc=f'[{symbol}]Train epoch={0}'.format(
                                                   self.epoch),
                                               ncols=80,
                                               leave=True,
@@ -131,14 +132,14 @@ class BaseDistiller(abc.ABC):
             # self.iteration += 1
             if self.iteration % self.valid_iter == 0:
                 time.sleep(2)  # Prevent possible deadlock during epoch transition TODO: ?
-                self.validate()
+                self.validate(symbol)
             self.train_batch(data_pack)
 
             if self.iteration >= self.max_iter:
                 break
             self.iteration += 1
 
-    def train(self):
+    def train(self, symbol:str):
         '''entrance of the whole training process
         '''
         max_epoch = int(math.ceil(1. * self.max_iter / len(self.train_loader)))
@@ -146,12 +147,13 @@ class BaseDistiller(abc.ABC):
         TR(f"max_epoch={max_epoch}, self.epoch={self.epoch}")
         for epoch in tqdm.trange(self.epoch,
                                  max_epoch,
-                                 desc='Train',
+                                 desc=f'[{symbol}] Train epoch',
                                  ncols=80):
+            print("")
             TR(f"epoch={epoch}")
             self.epoch = epoch
             time.sleep(2)  # Prevent possible deadlock during epoch transition
-            self.train_epoch()
+            self.train_epoch(symbol)
             if self.iteration >= self.max_iter:
                 print(f"break on over max_iter:{self.iteration}")
                 break

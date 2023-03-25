@@ -78,9 +78,9 @@ class COTRDistiller(base_distiller.BaseDistiller):
             t_cc = self.__class__.cycle_consistency_bidirectional(self.t_model, img, query, t_pred)
             s_cc = self.__class__.cycle_consistency_bidirectional(self.s_model, img, query, s_pred)
 
-            return loss_data, s_pred, t_cc, s_cc
+            return loss_data, t_pred, s_pred, t_cc, s_cc
 
-    def validate(self):
+    def validate(self, symbol:str):
         '''validate for whole validation dataset
         '''
         # inferring mode
@@ -92,10 +92,10 @@ class COTRDistiller(base_distiller.BaseDistiller):
         s_cc_list = []
         for batch_idx, data_pack in tqdm.tqdm(
                 enumerate(self.val_loader), total=len(self.val_loader),
-                desc='Valid iteration=%d' % self.iteration, ncols=80,
+                desc=f'[{symbol}] Valid iteration=%d' % self.iteration, ncols=80,
                 leave=False):
             # validate a batch
-            loss_data, pred, t_cc, s_cc = self.validate_batch(data_pack)
+            loss_data, t_pred, s_pred, t_cc, s_cc = self.validate_batch(data_pack)
             val_loss_list.append(loss_data)
             t_cc_list.append(t_cc)
             s_cc_list.append(s_cc)
@@ -103,7 +103,7 @@ class COTRDistiller(base_distiller.BaseDistiller):
         mean_loss = np.array(val_loss_list).mean()
         mean_t_cc = np.array(t_cc_list).mean()
         mean_s_cc = np.array(s_cc_list).mean()
-        validation_data = {'val_loss': mean_loss, 'pred': pred, 't_cc':mean_t_cc, 's_cc':mean_s_cc}
+        validation_data = {'val_loss': mean_loss, 't_pred':t_pred, 's_pred':s_pred, 't_cc':mean_t_cc, 's_cc':mean_s_cc}
         self.push_validation_data(data_pack, validation_data)
         self.save_model()
 
@@ -114,20 +114,25 @@ class COTRDistiller(base_distiller.BaseDistiller):
         val_loss = validation_data['val_loss']
         t_cc = validation_data['t_cc']
         s_cc = validation_data['s_cc']
-        pred_corrs = np.concatenate([data_pack['queries'].numpy(), validation_data['pred'].cpu().numpy()], axis=-1)
-        pred_corrs = self.draw_corrs(data_pack['image'], pred_corrs)
+        t_pred_corrs = np.concatenate([data_pack['queries'].numpy(), validation_data['t_pred'].cpu().numpy()], axis=-1)
+        t_pred_corrs = self.draw_corrs(data_pack['image'], t_pred_corrs)
+        s_pred_corrs = np.concatenate([data_pack['queries'].numpy(), validation_data['s_pred'].cpu().numpy()], axis=-1)
+        s_pred_corrs = self.draw_corrs(data_pack['image'], s_pred_corrs)
         gt_corrs = np.concatenate([data_pack['queries'].numpy(), data_pack['targets'].cpu().numpy()], axis=-1)
         gt_corrs = self.draw_corrs(data_pack['image'], gt_corrs, (0, 255, 0))
 
         gt_img = vutils.make_grid(gt_corrs, normalize=True, scale_each=True)
-        pred_img = vutils.make_grid(pred_corrs, normalize=True, scale_each=True)
+        t_pred_img = vutils.make_grid(t_pred_corrs, normalize=True, scale_each=True)
+        s_pred_img = vutils.make_grid(s_pred_corrs, normalize=True, scale_each=True)
+
         tb_datapack = tensorboard_helper.TensorboardDatapack()
         tb_datapack.set_training(False)
         tb_datapack.set_iteration(self.iteration)
         tb_datapack.add_scalar({'loss/val': val_loss})
         tb_datapack.add_scalar({'cc': {'val/teacher':t_cc, 'val/student':s_cc}})
         tb_datapack.add_image({'image/gt_corrs': gt_img})
-        tb_datapack.add_image({'image/pred_corrs': pred_img})
+        tb_datapack.add_image({'image/t_pred_corrs': t_pred_img})
+        tb_datapack.add_image({'image/s_pred_corrs': s_pred_img})
         self.tb_pusher.push_to_tensorboard(tb_datapack)
 
     def save_model(self):

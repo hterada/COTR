@@ -151,7 +151,7 @@ def distill_backbone(opt, gpuno:int, t_weights_path:str, s_weights_path:str, s_l
                               opt_str,
                               opt.resume, t_weights_path, s_weights_path
                               )
-    distiller.train()
+    distiller.train(opt.suffix)
 
 
 if __name__ == "__main__":
@@ -210,7 +210,7 @@ if __name__ == "__main__":
     parser.add_argument('--load_s_weights', type=str, default=None,
                         help='load a pretrained set of weights for student, you need to provide the model id')
 
-    parser.add_argument('--suffix', type=str, default='', help='model suffix')
+    parser.add_argument('--suffix', type=str, default=None, help='model suffix')
     parser.add_argument('--gpuno', type=int, default=0, help='specify gpu number:0,1,...')
 
     opt = parser.parse_args()
